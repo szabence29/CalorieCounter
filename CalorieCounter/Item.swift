@@ -1,0 +1,18 @@
+//
+//  Item.swift
+//  CalorieCounter
+//
+//  Created by Szabó Bence on 2025. 09. 09..
+//
+
+import Foundation
+import SwiftData
+
+@Model
+final class Item {
+    var timestamp: Date
+    
+    init(timestamp: Date) {
+        self.timestamp = timestamp
+    }
+}
