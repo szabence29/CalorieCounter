@@ -1,4 +1,4 @@
-import SwiftUI
+import SwiftUI;
 
 struct MainTabBar: View {
     var body: some View {
@@ -8,7 +8,7 @@ struct MainTabBar: View {
                     Image(systemName: "house")
                     Text("Home")
                 }
-            Text("Add")
+            AddView()
                 .tabItem {
                     Image(systemName: "plus.circle")
                     Text("Add")
