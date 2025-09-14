@@ -1,10 +1,3 @@
-//
-//  Item.swift
-//  CalorieCounter
-//
-//  Created by Szabó Bence on 2025. 09. 09..
-//
-
 import Foundation
 import SwiftData
 

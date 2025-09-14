@@ -1,10 +1,3 @@
-//
-//  CalorieCounterApp.swift
-//  CalorieCounter
-//
-//  Created by Szabó Bence on 2025. 09. 09..
-//
-
 import SwiftUI
 import SwiftData
 
