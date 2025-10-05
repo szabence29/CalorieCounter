@@ -68,7 +68,7 @@ struct LoginView: View {
                 Alert(title: Text("Message"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
             }
             .navigationBarHidden(true)
-        }
+        }	
         .fullScreenCover(isPresented: $isLoggedIn) {
             MainTabBar()
         }
