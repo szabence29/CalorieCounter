@@ -1,13 +1,13 @@
 import SwiftUI
 import SwiftData
 
-struct ContentView: View {
+struct HomeView: View {
     var body: some View {
         MainTabBar()
     }
 }
 
 #Preview {
-    ContentView()
+    HomeView()
         .modelContainer(for: Item.self, inMemory: true)
 }

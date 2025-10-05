@@ -1,4 +1,4 @@
-import SwiftUI;
+import SwiftUI
 
 struct MainTabBar: View {
     var body: some View {
@@ -25,4 +25,8 @@ struct MainTabBar: View {
                 }
         }
     }
+}
+
+#Preview {
+    MainTabBar()
 }
