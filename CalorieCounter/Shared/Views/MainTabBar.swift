@@ -18,7 +18,7 @@ struct MainTabBar: View {
                     Image(systemName: "bubble.left.and.bubble.right")
                     Text("Chat")
                 }
-            Text("Profile")
+            ProfileView()
                 .tabItem {
                     Image(systemName: "person.crop.circle")
                     Text("Profile")

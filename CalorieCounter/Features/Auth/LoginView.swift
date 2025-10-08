@@ -1,5 +1,8 @@
 import SwiftUI
 import FirebaseAuth
+import FirebaseCore  // For FirebaseApp
+import GoogleSignIn  // For Google sign-in
+import AuthenticationServices  // For Apple sign-in
 
 struct LoginView: View {
     @State private var email = ""
@@ -9,6 +12,8 @@ struct LoginView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var isLoggedIn = false
+    
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         NavigationView {
@@ -61,6 +66,25 @@ struct LoginView: View {
                         .foregroundColor(.blue)
                 }
                 
+                VStack(spacing: 15) {
+                    Text("OR")
+                        .foregroundColor(.gray)
+                    
+                    // Google Sign In button
+                    Button(action: signInWithGoogle) {
+                        HStack {
+                            Image(systemName: "g.circle.fill")
+                                .foregroundColor(.red)
+                            Text("Sign in with Google")
+                                .fontWeight(.medium)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
+                    }
+                }
+                
                 Spacer()
             }
             .padding()
@@ -68,7 +92,7 @@ struct LoginView: View {
                 Alert(title: Text("Message"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
             }
             .navigationBarHidden(true)
-        }	
+        }
         .fullScreenCover(isPresented: $isLoggedIn) {
             MainTabBar()
         }
@@ -100,6 +124,42 @@ struct LoginView: View {
                 showAlert = true
             } else {
                 isLoggedIn = true
+            }
+        }
+    }
+    
+    private func signInWithGoogle() {
+        guard let clientID = FirebaseApp.app()?.options.clientID else { return }
+        
+        // Configure Google Sign In
+        let config = GIDConfiguration(clientID: clientID)
+        GIDSignIn.sharedInstance.configuration = config
+        
+        // Start the sign in flow
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else { return }
+        
+        GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController) { result, error in
+            if let error = error {
+                alertMessage = error.localizedDescription
+                showAlert = true
+                return
+            }
+            
+            guard let user = result?.user,
+                  let idToken = user.idToken?.tokenString else { return }
+            
+            let credential = GoogleAuthProvider.credential(withIDToken: idToken,
+                                                         accessToken: user.accessToken.tokenString)
+            
+            // Sign in with Firebase
+            Auth.auth().signIn(with: credential) { result, error in
+                if let error = error {
+                    alertMessage = error.localizedDescription
+                    showAlert = true
+                } else {
+                    isLoggedIn = true
+                }
             }
         }
     }

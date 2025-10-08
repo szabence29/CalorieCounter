@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 import FirebaseCore
+import GoogleSignIn
+import Firebase
 
 @main
 struct CalorieCounterApp: App {
@@ -26,7 +28,7 @@ struct CalorieCounterApp: App {
     // Define the app's UI structure
     var body: some Scene {
         WindowGroup {
-            LoginView()
+            HomeView()
         }
         .modelContainer(sharedModelContainer) // Make the database container available throughout the app
     }
@@ -35,9 +37,12 @@ struct CalorieCounterApp: App {
 // App delegate for Firebase setup
 // Initialize Firebase with settings from GoogleService-Info.plist
 class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication,
-                   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         FirebaseApp.configure()
         return true
+    }
+    
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        return GIDSignIn.sharedInstance.handle(url)
     }
 }
