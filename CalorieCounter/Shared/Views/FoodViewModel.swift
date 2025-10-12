@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SwiftData
+import Alamofire
 
 struct FoodResponse: Decodable {
     let foods: [APIFoodItem]
@@ -12,36 +13,54 @@ struct APIFoodItem: Identifiable, Decodable {
     let description: String
     var id: Int { fdcId }
     
-    // Convert API model to SwiftData model
+    /// Pl. "Agave, raw (Southwest)" -> "Agave"
+    var primaryName: String {
+        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let firstChunk = trimmed.split(separator: ",").first {
+            return String(firstChunk)
+        }
+        // Fallback: első szó
+        return String(trimmed.split(separator: " ").first ?? Substring(trimmed))
+    }
+    
     func toFoodItem() -> FoodItem {
-        return FoodItem(fdcId: fdcId, description: description)
+        FoodItem(fdcId: fdcId, description: description)
     }
 }
 
-class FoodViewModel: ObservableObject {
+final class FoodViewModel: ObservableObject {
     @Published var items: [APIFoodItem] = []
-    private var cancellables = Set<AnyCancellable>()
-    
     private let apiKey = "MVRBUXmFhU6vD1tD3VURDkHvKieOdfHEkXfutOfh"
     
-    func fetchFoods(query: String = "") {
-        let searchQuery = query.isEmpty ? "" : query
-        let urlString = "https://api.nal.usda.gov/fdc/v1/foods/search?query=\(searchQuery)&pageSize=200&api_key=\(apiKey)"
-        guard let encodedString = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: encodedString) else { return }
-        
-        URLSession.shared.dataTaskPublisher(for: url)
-            .map { $0.data }
-            .decode(type: FoodResponse.self, decoder: JSONDecoder())
-            .map { $0.foods }
-            .replaceError(with: [])
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$items)
+    // Csoportok a List-hez: ABC szerint rendezett szekciók
+    var groupedSections: [(key: String, value: [APIFoodItem])] {
+        let grouped = Dictionary(grouping: items, by: { $0.primaryName })
+        let sortedKeys = grouped.keys.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        return sortedKeys.map { key in
+            let values = (grouped[key] ?? []).sorted { $0.description.localizedCaseInsensitiveCompare($1.description) == .orderedAscending }
+            return (key, values)
+        }
     }
     
-    // Helper method to save an API item to the database
+    private let session = Session.default
+    private var currentRequest: DataRequest?
+    
+    func fetchFoods(query: String = "") {
+        currentRequest?.cancel()
+        let url = "https://api.nal.usda.gov/fdc/v1/foods/search"
+        let params: Parameters = ["query": query, "pageSize": 200, "api_key": apiKey]
+        
+        currentRequest = session.request(url, parameters: params)
+            .validate()
+            .responseDecodable(of: FoodResponse.self) { [weak self] response in
+                switch response.result {
+                case .success(let r): self?.items = r.foods
+                case .failure:        self?.items = []
+                }
+            }
+    }
+    
     func saveToDatabase(item: APIFoodItem, context: ModelContext) {
-        let foodItem = item.toFoodItem()
-        context.insert(foodItem)
+        context.insert(item.toFoodItem())
     }
 }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F462C8092E9C2A310058E6A0 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = F462C8082E9C2A310058E6A0 /* Alamofire */; };
 		F48789812E944D3A002DC9EB /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = F48789802E944D3A002DC9EB /* GoogleSignIn */; };
 		F48789832E944D3A002DC9EB /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = F48789822E944D3A002DC9EB /* GoogleSignInSwift */; };
 		F4E30DFB2E931016005ABAD4 /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = F4E30DFA2E931016005ABAD4 /* FirebaseAI */; };
@@ -102,6 +103,7 @@
 				F4E30E1B2E931016005ABAD4 /* FirebaseInstallations in Frameworks */,
 				F4E30E072E931016005ABAD4 /* FirebaseAuth in Frameworks */,
 				F4E30E252E931016005ABAD4 /* FirebaseStorageCombine-Community in Frameworks */,
+				F462C8092E9C2A310058E6A0 /* Alamofire in Frameworks */,
 				F4E30E032E931016005ABAD4 /* FirebaseAppCheck in Frameworks */,
 				F4E30E232E931016005ABAD4 /* FirebaseStorage in Frameworks */,
 				F4E30E212E931016005ABAD4 /* FirebaseRemoteConfig in Frameworks */,
@@ -208,6 +210,7 @@
 				F4E30E242E931016005ABAD4 /* FirebaseStorageCombine-Community */,
 				F48789802E944D3A002DC9EB /* GoogleSignIn */,
 				F48789822E944D3A002DC9EB /* GoogleSignInSwift */,
+				F462C8082E9C2A310058E6A0 /* Alamofire */,
 			);
 			productName = CalorieCounter;
 			productReference = F4335FAC2E70BCC300F0806F /* CalorieCounter.app */;
@@ -294,6 +297,7 @@
 			packageReferences = (
 				F4E30DF92E931016005ABAD4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				F487897F2E944D3A002DC9EB /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				F462C8072E9C2A310058E6A0 /* XCRemoteSwiftPackageReference "Alamofire" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F4335FAD2E70BCC300F0806F /* Products */;
@@ -658,6 +662,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		F462C8072E9C2A310058E6A0 /* XCRemoteSwiftPackageReference "Alamofire" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Alamofire/Alamofire.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.10.2;
+			};
+		};
 		F487897F2E944D3A002DC9EB /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/google/GoogleSignIn-iOS.git";
@@ -677,6 +689,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		F462C8082E9C2A310058E6A0 /* Alamofire */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F462C8072E9C2A310058E6A0 /* XCRemoteSwiftPackageReference "Alamofire" */;
+			productName = Alamofire;
+		};
 		F48789802E944D3A002DC9EB /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F487897F2E944D3A002DC9EB /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
