@@ -1,50 +1,54 @@
 import SwiftUI
-import FirebaseAuth
-import FirebaseCore  // For FirebaseApp
-import GoogleSignIn  // For Google sign-in
-import AuthenticationServices  // For Apple sign-in
+import FirebaseAuth           // Email/jelszó és 3rd-party auth Firebase-hez
+import FirebaseCore           // FirebaseApp hozzáférés (clientID kinyerése)
+import GoogleSignIn           // Google bejelentkezés
+import AuthenticationServices  // (Előkészítve Apple Sign In-hez; itt még nincs használva)
 
 struct LoginView: View {
-    @State private var email = ""
-    @State private var password = ""
-    @State private var confirmPassword = ""
-    @State private var isRegistering = false
-    @State private var showAlert = false
-    @State private var alertMessage = ""
-    @State private var isLoggedIn = false
-    
-    @Environment(\.colorScheme) var colorScheme
-    
+    // ── UI állapot és űrlapmezők ────────────────────────────────────────────────
+    @State private var email = ""               // email mező
+    @State private var password = ""            // jelszó mező
+    @State private var confirmPassword = ""     // jelszó megerősítés regisztrációnál
+    @State private var isRegistering = false    // login <-> regisztráció mód
+    @State private var showAlert = false        // alert láthatósága
+    @State private var alertMessage = ""        // alert szöveg
+    @State private var isLoggedIn = false       // sikeres auth után true
+
+    @Environment(\.colorScheme) var colorScheme // dark/light mód (ha kell)
+
     var body: some View {
-        NavigationView {
+        NavigationView { // iOS 16-tól inkább NavigationStack javasolt
             VStack(spacing: 20) {
-                // Logo or app name
+
+                // App név / logó
                 Text("Calorie Counter")
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .padding(.bottom, 30)
-                
-                // Form fields
+
+                // Email mező
                 TextField("Email", text: $email)
                     .keyboardType(.emailAddress)
                     .autocapitalization(.none)
                     .padding()
                     .background(Color(.systemGray6))
                     .cornerRadius(10)
-                
+
+                // Jelszó mező
                 SecureField("Password", text: $password)
                     .padding()
                     .background(Color(.systemGray6))
                     .cornerRadius(10)
-                
+
+                // Csak regisztrációs módban jelenik meg
                 if isRegistering {
                     SecureField("Confirm Password", text: $confirmPassword)
                         .padding()
                         .background(Color(.systemGray6))
                         .cornerRadius(10)
                 }
-                
-                // Action button
+
+                // Fő műveleti gomb: regisztráció vagy bejelentkezés
                 Button(action: {
                     isRegistering ? registerUser() : loginUser()
                 }) {
@@ -55,26 +59,28 @@ struct LoginView: View {
                         .background(Color.blue)
                         .cornerRadius(10)
                 }
-                
-                // Toggle between login and register
+
+                // Módváltó gomb (login <-> reg)
                 Button(action: {
                     isRegistering.toggle()
-                    password = ""
+                    password = ""         // váltáskor mezők ürítése
                     confirmPassword = ""
                 }) {
-                    Text(isRegistering ? "Already have an account? Login" : "Don't have an account? Register")
+                    Text(isRegistering
+                         ? "Already have an account? Login"
+                         : "Don't have an account? Register")
                         .foregroundColor(.blue)
                 }
-                
+
+                // 3rd party bejelentkezés (Google)
                 VStack(spacing: 15) {
                     Text("OR")
                         .foregroundColor(.gray)
-                    
-                    // Google Sign In button
+
                     Button(action: signInWithGoogle) {
                         HStack {
                             Image(systemName: "g.circle.fill")
-                                .foregroundColor(.red)
+                                .foregroundColor(.red) // ikon jelzés
                             Text("Sign in with Google")
                                 .fontWeight(.medium)
                         }
@@ -83,76 +89,91 @@ struct LoginView: View {
                         .background(Color(.systemGray6))
                         .cornerRadius(10)
                     }
+                    
+                    // Apple sign in gomb
                 }
-                
+
                 Spacer()
             }
             .padding()
+            // Hiba/siker üzenetek megjelenítése
             .alert(isPresented: $showAlert) {
-                Alert(title: Text("Message"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+                Alert(title: Text("Message"),
+                      message: Text(alertMessage),
+                      dismissButton: .default(Text("OK")))
             }
-            .navigationBarHidden(true)
+            .navigationBarHidden(true) // fejléc elrejtése (NavigationView mellett)
         }
+        // Sikeres auth után teljes képernyőn megnyitja a fő UI-t
         .fullScreenCover(isPresented: $isLoggedIn) {
             MainTabBar()
         }
     }
-    
+
+    // ── Regisztráció email/jelszóval ───────────────────────────────────────────
     private func registerUser() {
+        // Egyezés ellenőrzés
         if password != confirmPassword {
             alertMessage = "Passwords do not match"
             showAlert = true
             return
         }
-        
+
+        // Firebase Auth createUser
         Auth.auth().createUser(withEmail: email, password: password) { result, error in
             if let error = error {
-                alertMessage = error.localizedDescription
+                alertMessage = error.localizedDescription // pl. gyenge jelszó, foglalt email stb.
                 showAlert = true
             } else {
                 alertMessage = "Registration successful!"
                 showAlert = true
-                isLoggedIn = true
+                isLoggedIn = true // továbblépés a fő felületre
             }
         }
     }
-    
+
+    // ── Bejelentkezés email/jelszóval ─────────────────────────────────────────
     private func loginUser() {
         Auth.auth().signIn(withEmail: email, password: password) { result, error in
             if let error = error {
-                alertMessage = error.localizedDescription
+                alertMessage = error.localizedDescription // helytelen adatok stb.
                 showAlert = true
             } else {
                 isLoggedIn = true
             }
         }
     }
-    
+
+    // ── Google Sign-In, majd Firebase-be beléptetés Google credentiallel ──────
     private func signInWithGoogle() {
+        // ClientID kinyerése a Firebase konfigurációból
         guard let clientID = FirebaseApp.app()?.options.clientID else { return }
-        
-        // Configure Google Sign In
+
+        // Google konfiguráció beállítása
         let config = GIDConfiguration(clientID: clientID)
         GIDSignIn.sharedInstance.configuration = config
-        
-        // Start the sign in flow
+
+        // Szükség van egy prezentáló view controllerre (UIKit)
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootViewController = windowScene.windows.first?.rootViewController else { return }
-        
+
+        // Google bejelentkezési flow indítása
         GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController) { result, error in
             if let error = error {
                 alertMessage = error.localizedDescription
                 showAlert = true
                 return
             }
-            
+
+            // Siker: tokenek kinyerése Google-tól
             guard let user = result?.user,
                   let idToken = user.idToken?.tokenString else { return }
-            
+
+            // Firebase credential létrehozása Google tokenekből
             let credential = GoogleAuthProvider.credential(withIDToken: idToken,
-                                                         accessToken: user.accessToken.tokenString)
-            
-            // Sign in with Firebase
+                                                           accessToken: user.accessToken.tokenString)
+
+            // Beléptetés Firebase-be a Google credentiallel
             Auth.auth().signIn(with: credential) { result, error in
                 if let error = error {
                     alertMessage = error.localizedDescription

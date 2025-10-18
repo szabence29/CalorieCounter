@@ -2,47 +2,48 @@ import SwiftUI
 import SwiftData
 import FirebaseCore
 import GoogleSignIn
-import Firebase
+import FirebaseAuth
 
 @main
 struct CalorieCounterApp: App {
-    // Connect the UIKit app delegate to SwiftUI for Firebase initialization
-    // This allows Firebase to be properly initialized at app launch
+    // Firebase init AppDelegate-ben (ELÉG ITT, ne hívd még egyszer init-ben)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    
-    // Setup the database container for SwiftData
-    // Defines the database scheme
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            FoodItem.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
+    // ProfileStore a teljes appnak
+    @StateObject private var profileStore = ProfileStore()
+
+    // SwiftData container (maradhat ahogy volt)
+    var sharedModelContainer: ModelContainer = {
+        let schema = Schema([ FoodItem.self ])
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)") //If fail the app crashes
+            fatalError("Could not create ModelContainer: \(error)")
         }
     }()
 
-    // Define the app's UI structure
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            RootView() // auth-alapú router
+                .environmentObject(profileStore)
         }
-        .modelContainer(sharedModelContainer) // Make the database container available throughout the app
+        .modelContainer(sharedModelContainer)
     }
 }
 
-// App delegate for Firebase setup
-// Initialize Firebase with settings from GoogleService-Info.plist
+// Firebase setup – ELÓG ITT a configure()
 class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey : Any]? = nil
+    ) -> Bool {
         FirebaseApp.configure()
         return true
     }
-    
-    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+
+    func application(_ app: UIApplication, open url: URL,
+                     options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
         return GIDSignIn.sharedInstance.handle(url)
     }
 }
