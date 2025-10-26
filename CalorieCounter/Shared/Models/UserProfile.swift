@@ -1,29 +1,33 @@
 // UserProfile.swift
 import Foundation
 
-/// Firestore-ban a /users/{uid} dokumentum tartalma.
-/// Nincs szükség FirebaseFirestoreSwift-re; minden mező opcionális.
+/// Firestore: /users/{uid}
+/// Minden mező opcionális; az app a ProfileStore-on át kezeli.
 struct UserProfile: Codable, Equatable {
-    var id: String?            // Firestore doc ID (általában az uid)
+    var id: String?                    // doc ID (ált. uid)
     var name: String?
     var age: Int?
-    var sex: String?           // "male" | "female" | stb.
+    var sex: String?                   // "male" | "female"
 
     var weightKg: Double?
     var heightCm: Double?
     var startingWeightKg: Double?
     var goalWeightKg: Double?
 
-    var weightUnit: String?    // "kg" | "lbs"
-    var heightUnit: String?    // "cm" | "ftIn"
+    var weightUnit: String?            // "kg" | "lbs"
+    var heightUnit: String?            // "cm" | "ftIn"
 
-    var activity: String?      // pl. "Moderately active"
-    var goal: String?          // pl. "Maintain"
+    var activity: String?              // "Moderately active" stb.
+    var goal: String?                  // "Lose weight" | "Maintain" | "Gain muscle"
     var weeklyDeltaKg: Double?
+
+    // Onboarding
+    var onboardingCompleted: Bool?
+    var createdAt: Date?               // szerver időbélyeg (map-elve Timestamp-ből)
 }
 
-/// Íráshoz: csak a nem-nil mezőket tesszük be a Firestore dokumentumba.
 extension UserProfile {
+    /// Íráshoz: csak a nem-nil mezőket tesszük be a dokumentumba.
     var asDict: [String: Any] {
         var d: [String: Any] = [:]
         if let name { d["name"] = name }
@@ -41,6 +45,9 @@ extension UserProfile {
         if let activity { d["activity"] = activity }
         if let goal { d["goal"] = goal }
         if let weeklyDeltaKg { d["weeklyDeltaKg"] = weeklyDeltaKg }
+
+        if let onboardingCompleted { d["onboardingCompleted"] = onboardingCompleted }
+        if let createdAt { d["createdAt"] = createdAt }
         return d
     }
 }

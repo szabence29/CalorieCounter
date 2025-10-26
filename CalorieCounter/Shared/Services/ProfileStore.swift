@@ -5,12 +5,11 @@ import FirebaseAuth
 import FirebaseFirestore
 
 /// Egyetlen igazságforrás a felhasználói profilhoz.
-/// - Betöltés & realtime figyelés a /users/{uid} dokumentumra
-/// - Mentés: teljes (save) vagy részleges (update(fields:))
 @MainActor
 final class ProfileStore: ObservableObject {
     @Published private(set) var profile = UserProfile()
     @Published private(set) var isLoaded = false
+    @Published private(set) var isNewUser = false
     @Published var errorMessage: String?
 
     private var listener: ListenerRegistration?
@@ -22,18 +21,23 @@ final class ProfileStore: ObservableObject {
         db.collection("users").document(uid)
     }
 
-    /// Indításkor betölti és feliratkozik változásokra.
+    /// Bejelentkezett user esetén betölt és feliratkozik a /users/{uid} dokumentumra.
     func start() async {
         guard let uid = Auth.auth().currentUser?.uid else {
             errorMessage = "Nincs bejelentkezett felhasználó."
             return
         }
 
-        // Ha a dokumentum nem létezik, hozzunk létre egy üreset (később mezőnként frissítünk).
         do {
-            let snap = try await ref(uid: uid).getDocument()
+            let r = ref(uid: uid)
+            let snap = try await r.getDocument()
             if !snap.exists {
-                try await ref(uid: uid).setData([:])
+                // Új user: hozzunk létre egy kezdő dokumentumot
+                isNewUser = true
+                try await r.setData([
+                    "onboardingCompleted": false,
+                    "createdAt": FieldValue.serverTimestamp()
+                ], merge: true)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -53,21 +57,37 @@ final class ProfileStore: ObservableObject {
         }
     }
 
-    /// Teljes modell mentése (merge: true, hogy a hiányzó mezők ne töröljenek).
+    /// Teljes modell írása (merge: true).
     func save(_ new: UserProfile) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         do { try await ref(uid: uid).setData(new.asDict, merge: true) }
         catch { errorMessage = error.localizedDescription }
     }
 
-    /// Részleges frissítés 1-2 mezőre.
+    /// Részleges frissítés.
     func update(fields: [String: Any]) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         do { try await ref(uid: uid).setData(fields, merge: true) }
         catch { errorMessage = error.localizedDescription }
     }
 
-    /// Dict -> Modell leképezés (FirestoreSwift nélkül).
+    /// Onboarding flag beállítása true-ra (kényelmi).
+    func markOnboardingCompleted() async {
+        await update(fields: ["onboardingCompleted": true])
+        isNewUser = false
+    }
+
+    /// Kilépés után a store ürítése (villanás elkerülésére).
+    func logoutReset() {
+        listener?.remove(); listener = nil
+        profile = UserProfile()
+        isLoaded = false
+        isNewUser = false
+        errorMessage = nil
+    }
+
+    // MARK: - Mapping
+
     private static func map(dict: [String: Any], id: String?) -> UserProfile {
         var p = UserProfile()
         p.id = id
@@ -83,6 +103,11 @@ final class ProfileStore: ObservableObject {
         p.activity = dict["activity"] as? String
         p.goal = dict["goal"] as? String
         p.weeklyDeltaKg = dict["weeklyDeltaKg"] as? Double
+        p.onboardingCompleted = dict["onboardingCompleted"] as? Bool
+
+        if let ts = dict["createdAt"] as? Timestamp {
+            p.createdAt = ts.dateValue()
+        }
         return p
     }
 }

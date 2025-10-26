@@ -1,87 +1,70 @@
 import SwiftUI
 import PhotosUI
+import FirebaseAuth
+import GoogleSignIn
 
 struct ProfileView: View {
-    // ───────────────────────────────
-    // Tartós (UserDefaults) adatok
-    // ───────────────────────────────
-    // FONTOS: a kulcsok neve maradjon konzisztens az egész appban!
-    @AppStorage("name") private var name: String = "Gipsz Jakab"
-    @AppStorage("age") private var age: Int = 28
-    @AppStorage("sex") private var sexRaw: String = Sex.male.rawValue
+    @EnvironmentObject var store: ProfileStore
 
-    @AppStorage("weightKg") private var weightKg: Double = 80
-    @AppStorage("heightCm") private var heightCm: Double = 178
-    @AppStorage("startingWeightKg") private var startingWeightKg: Double = 84
-    @AppStorage("goalWeightKg") private var goalWeightKg: Double = 75
-
-    @AppStorage("weightUnit") private var weightUnitRaw: String = WeightUnit.kg.rawValue
-    @AppStorage("heightUnit") private var heightUnitRaw: String = HeightUnit.cm.rawValue
-
-    // ───────────────────────────────
-    // Csak UI állapot (nem mentett)
-    // ───────────────────────────────
     @State private var streakDays: Int = 28
     @State private var startedDate: Date = ISO8601DateFormatter().date(from: "2023-06-10T00:00:00Z") ?? .now
 
-    // ───────────────────────────────
-    // Képválasztás / kamera
-    // ───────────────────────────────
-    @State private var profileImage: Image? = Image(systemName: "person.crop.circle.fill") // kezdő placeholder
-    @State private var selectedItem: PhotosPickerItem? = nil   // PhotosPicker kiválasztott elem
-    @State private var inputImage: UIImage? = nil              // nyers UIKit kép (galéria/kamera)
-    @State private var showingCamera = false                   // kamera sheet megnyitása
+    @State private var profileImage: Image? = Image(systemName: "person.crop.circle.fill")
+    @State private var selectedItem: PhotosPickerItem?
+    @State private var inputImage: UIImage?
+    @State private var showingCamera = false
 
-    // ───────────────────────────────
-    // Mértékegységek és enum-ok
-    // ───────────────────────────────
-    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRaw) ?? .kg }
-    private var heightUnit: HeightUnit { HeightUnit(rawValue: heightUnitRaw) ?? .cm }
-    private var sex: Sex { Sex(rawValue: sexRaw) ?? .male }
+    @State private var showAlert = false
+    @State private var alertMessage = ""
 
-    // Haladás a cél felé (0...1)
+    private var name: String { store.profile.name ?? "—" }
+    private var ageText: String {
+        let age = store.profile.age ?? 0
+        let sexCap = (store.profile.sex ?? "").capitalized
+        return age == 0 ? sexCap : "Age \(age) · \(sexCap)"
+    }
+    private var weightUnit: String { store.profile.weightUnit ?? "kg" }
+    private var heightUnit: String { store.profile.heightUnit ?? "cm" }
+
     private var percentToGoal: Double {
-        let total = abs(startingWeightKg - goalWeightKg) // teljes „út”
-        guard total > 0 else { return 1 }                // ha nincs különbség, tekintsük késznek
-        let done = abs(startingWeightKg - weightKg)      // eddig megtett rész
-        return min(max(done / total, 0), 1)              // clamp [0,1]
+        let start = store.profile.startingWeightKg ?? .nan
+        let goal  = store.profile.goalWeightKg ?? .nan
+        let curr  = store.profile.weightKg ?? .nan
+        guard start.isFinite, goal.isFinite, curr.isFinite else { return 0 }
+        let total = abs(start - goal)
+        if total <= 0 { return 1 }
+        let done = abs(start - curr)
+        return min(max(done / total, 0), 1)
     }
 
-    // Súly megjelenítése a beállított egységben (érték, egység)
-    private func weightText(from kg: Double) -> (String, String) {
+    private func kgToLbs(_ kg: Double) -> Double { kg * 2.2046226218 }
+    private func weightText(from kgOpt: Double?) -> (String, String) {
+        guard let kg = kgOpt else { return ("—", weightUnit) }
         switch weightUnit {
-        case .kg:  return ("\(Int(round(kg)))", "kg")
-        case .lbs: return ("\(Int(round(kgToLbs(kg))))", "lbs")
+        case "kg":  return ("\(Int(round(kg)))", "kg")
+        case "lbs": return ("\(Int(round(kgToLbs(kg))))", "lbs")
+        default:    return ("\(Int(round(kg)))", weightUnit.uppercased())
         }
     }
-
-    // Magasság megjelenítése a beállított egységben (cm vagy láb+inch)
     private var heightText: String {
+        let cm = store.profile.heightCm ?? .nan
+        guard cm.isFinite else { return "—" }
         switch heightUnit {
-        case .cm:
-            return "\(Int(round(heightCm))) cm"
-        case .ftIn:
-            let (f, i) = cmToFeetInches(heightCm)
-            return "\(f)′ \(Int(round(i)))″"
+        case "cm":
+            return "\(Int(round(cm))) cm"
+        case "ftIn":
+            let totalInches = cm / 2.54
+            let feet = Int(totalInches / 12.0)
+            let inches = totalInches - Double(feet) * 12.0
+            return "\(feet)′ \(Int(round(inches)))″"
+        default:
+            return "\(Int(round(cm))) \(heightUnit)"
         }
     }
-
-    // Heti „dummy” adatok (kis oszlopdiagramhoz)
-    struct DayProgress: Identifiable { let id = UUID(); let label: String; let value: Double; let metGoal: Bool }
-    @State private var week: [DayProgress] = [
-        .init(label: "M", value: 0.8, metGoal: true),
-        .init(label: "T", value: 0.75, metGoal: true),
-        .init(label: "W", value: 0.7, metGoal: true),
-        .init(label: "T", value: 0.45, metGoal: false),
-        .init(label: "F", value: 0.6, metGoal: true),
-        .init(label: "S", value: 0.4, metGoal: false),
-        .init(label: "S", value: 0.5, metGoal: false),
-    ]
 
     var body: some View {
         NavigationView {
             ZStack {
-                // Hátteret kitöltjük a grouped system háttérrel
                 Color(.systemGroupedBackground).ignoresSafeArea()
 
                 ScrollView {
@@ -95,25 +78,21 @@ struct ProfileView: View {
                         }
                         .padding(.horizontal)
 
-                        // ───────────────── Profile kártya ─────────────────
+                        // Profil kártya
                         VStack(alignment: .leading, spacing: 18) {
 
-                            // Felső sor: avatar + szöveges adatok + gombok
                             HStack(spacing: 16) {
                                 ZStack {
-                                    // Profilkép (ha van választva, az jelenik meg)
                                     profileImage?
                                         .resizable()
                                         .scaledToFill()
                                         .frame(width: 64, height: 64)
                                         .clipShape(Circle())
-                                    // Vékony kör kontúr
                                     Circle()
                                         .strokeBorder(Color(.systemGray5), lineWidth: 1)
                                         .frame(width: 64, height: 64)
                                 }
 
-                                // Névcímke, streak, kor+nem, magasság
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text(name).font(.system(size: 18, weight: .semibold))
 
@@ -126,7 +105,7 @@ struct ProfileView: View {
                                             .font(.subheadline)
                                     }
 
-                                    Text("Age \(age) · \(sex.rawValue.capitalized)")
+                                    Text(ageText)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
 
@@ -137,7 +116,6 @@ struct ProfileView: View {
 
                                 Spacer()
 
-                                // Képválasztó + kamera gombok
                                 HStack(spacing: 10) {
                                     PhotosPicker(selection: $selectedItem, matching: .images) {
                                         CircleIcon(systemName: "photo.fill.on.rectangle.fill")
@@ -148,10 +126,9 @@ struct ProfileView: View {
                                 }
                             }
 
-                            // Súly statisztikák (start, current, goal) – egységhez igazítva
-                            let start = weightText(from: startingWeightKg)
-                            let curr  = weightText(from: weightKg)
-                            let goal  = weightText(from: goalWeightKg)
+                            let start = weightText(from: store.profile.startingWeightKg)
+                            let curr  = weightText(from: store.profile.weightKg)
+                            let goal  = weightText(from: store.profile.goalWeightKg)
 
                             HStack {
                                 StatColumn(title: "Starting", value: start.0, unit: start.1)
@@ -161,7 +138,6 @@ struct ProfileView: View {
                                 StatColumn(title: "Goal",     value: goal.0,  unit: goal.1)
                             }
 
-                            // Cél felé haladás progress csík
                             VStack(alignment: .leading, spacing: 8) {
                                 Capsule()
                                     .fill(Color(.systemGray5))
@@ -193,39 +169,10 @@ struct ProfileView: View {
                         .shadow(color: Color.black.opacity(0.05), radius: 12, y: 4)
                         .padding(.horizontal)
 
-                        // ───────────────── Weekly progress ─────────────────
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack {
-                                Text("Weekly Progress").font(.headline)
-                                Spacer()
-                                Text("Last 7 days")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
+                        // Weekly progress
+                        WeeklyProgressCard()
 
-                            // Egyszerű oszlopdiagram jellegű nézet
-                            HStack(alignment: .bottom, spacing: 14) {
-                                ForEach(week) { day in
-                                    VStack {
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(day.metGoal ? Color.green : Color.orange)
-                                            .frame(width: 22, height: max(12, 120 * day.value))
-                                        Text(day.label)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 6)
-                        }
-                        .padding(20)
-                        .background(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                        .shadow(color: Color.black.opacity(0.05), radius: 12, y: 4)
-                        .padding(.horizontal)
-
-                        // ───────────────── Navigációs sorok ─────────────────
+                        // Navigáció + Sign out
                         VStack(spacing: 12) {
                             NavRow(icon: "chart.bar.doc.horizontal",
                                    tint: Color.blue.opacity(0.8),
@@ -238,6 +185,28 @@ struct ProfileView: View {
                             NavigationLink { SettingsView() } label: {
                                 NavRow(icon: "gearshape.fill", tint: .gray, title: "Settings")
                             }
+
+                            // SIGN OUT gomb
+                            Button(role: .destructive, action: signOut) {
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        Circle().fill(Color.red.opacity(0.12))
+                                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(.red)
+                                    }
+                                    .frame(width: 36, height: 36)
+
+                                    Text("Sign out")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(.red)
+                                    Spacer()
+                                }
+                                .padding(14)
+                                .background(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
+                            }
                         }
                         .padding(.horizontal)
 
@@ -247,13 +216,9 @@ struct ProfileView: View {
                     .padding(.bottom, 8)
                 }
             }
-            .navigationBarHidden(true) // külön fejléc nem kell
+            .navigationBarHidden(true)
         }
-        // Kamera sheet (UIKit picker becsomagolva)
-        .sheet(isPresented: $showingCamera) {
-            CameraPicker(image: $inputImage)
-        }
-        // Ha a PhotosPickerben kiválasztunk valamit → betöltjük Data-ként → UIImage
+        .sheet(isPresented: $showingCamera) { CameraPicker(image: $inputImage) }
         .onChange(of: selectedItem) { _, newValue in
             Task {
                 if let data = try? await newValue?.loadTransferable(type: Data.self),
@@ -262,20 +227,31 @@ struct ProfileView: View {
                 }
             }
         }
-        // Ha frissült az input UIImage → alakítsuk SwiftUI Image-é és jelenítsük meg
         .onChange(of: inputImage) { loadImage() }
+        .alert("Sign out error", isPresented: $showAlert) {
+            Button("OK", role: .cancel) { }
+        } message: { Text(alertMessage) }
     }
 
-    // UIImage → SwiftUI Image átalakítás és beállítás
     private func loadImage() {
         guard let inputImage else { return }
         profileImage = Image(uiImage: inputImage)
+    }
+
+    private func signOut() {
+        do {
+            store.logoutReset()
+            GIDSignIn.sharedInstance.signOut()
+            try Auth.auth().signOut()
+        } catch {
+            alertMessage = error.localizedDescription
+            showAlert = true
+        }
     }
 }
 
 // MARK: - Subviews
 
-// Egy stat oszlop (cím + érték + egység)
 private struct StatColumn: View {
     let title: String, value: String, unit: String
     var body: some View {
@@ -289,7 +265,6 @@ private struct StatColumn: View {
     }
 }
 
-// Kör alakú kis ikon fehér háttérrel és árnyékkal
 private struct CircleIcon: View {
     let systemName: String
     var body: some View {
@@ -302,7 +277,6 @@ private struct CircleIcon: View {
     }
 }
 
-// Egy navigációs sor (ikon + cím + >)
 private struct NavRow: View {
     let icon: String, tint: Color, title: String
     var body: some View {
@@ -328,35 +302,72 @@ private struct NavRow: View {
     }
 }
 
-// Kamera picker UIKit-ból becsomagolva SwiftUI-hoz
+private struct WeeklyProgressCard: View {
+    struct DayProgress: Identifiable { let id = UUID(); let label: String; let value: Double; let metGoal: Bool }
+    @State private var week: [DayProgress] = [
+        .init(label: "M", value: 0.8, metGoal: true),
+        .init(label: "T", value: 0.75, metGoal: true),
+        .init(label: "W", value: 0.7, metGoal: true),
+        .init(label: "T", value: 0.45, metGoal: false),
+        .init(label: "F", value: 0.6, metGoal: true),
+        .init(label: "S", value: 0.4, metGoal: false),
+        .init(label: "S", value: 0.5, metGoal: false),
+    ]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Weekly Progress").font(.headline)
+                Spacer()
+                Text("Last 7 days")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            HStack(alignment: .bottom, spacing: 14) {
+                ForEach(week) { day in
+                    VStack {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(day.metGoal ? Color.green : Color.orange)
+                            .frame(width: 22, height: max(12, 120 * day.value))
+                        Text(day.label)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 6)
+        }
+        .padding(20)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: Color.black.opacity(0.05), radius: 12, y: 4)
+        .padding(.horizontal)
+    }
+}
+
+// Kamera picker
 struct CameraPicker: UIViewControllerRepresentable {
-    @Environment(\.presentationMode) var presentationMode //Azért kell hogy a kameraablakot (sheet) be lehessen zárni
+    @Environment(\.presentationMode) var presentationMode
     @Binding var image: UIImage?
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
-        picker.delegate = context.coordinator //callback, hogy a felhasználó készít képet
-        picker.sourceType = .camera // kamera forrás
+        picker.delegate = context.coordinator
+        picker.sourceType = .camera
         return picker
     }
-
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) } //UIKit delegate-et valósítja meg
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         let parent: CameraPicker
         init(_ parent: CameraPicker) { self.parent = parent }
-
         func imagePickerController(_ picker: UIImagePickerController,
-                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) { //tartalmazza a kiválasztott képet
-            if let uiImage = info[ .originalImage ] as? UIImage {
-                parent.image = uiImage // visszaadjuk a kiválasztott képet a bindingon
-            }
-            parent.presentationMode.wrappedValue.dismiss() // sheet bezárása
+                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let uiImage = info[.originalImage] as? UIImage { parent.image = uiImage }
+            parent.presentationMode.wrappedValue.dismiss()
         }
     }
 }
 
-// Xcode preview
-#Preview { ProfileView() }
+#Preview { ProfileView().environmentObject(ProfileStore()) }

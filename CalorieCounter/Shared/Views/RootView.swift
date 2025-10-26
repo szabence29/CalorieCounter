@@ -1,42 +1,70 @@
 import SwiftUI
 import FirebaseAuth
 
+enum AuthPhase { case loading, signedOut, signedIn }
+
 struct RootView: View {
     @EnvironmentObject var profileStore: ProfileStore
-    @State private var isSignedIn: Bool = Auth.auth().currentUser != nil
+    @State private var phase: AuthPhase = .loading
     @State private var authHandle: AuthStateDidChangeListenerHandle?
 
     var body: some View {
         Group {
-            if isSignedIn {
+            switch phase {
+            case .loading:
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Checking session…").foregroundStyle(.secondary).font(.footnote)
+                }
+
+            case .signedOut:
+                LoginView()
+
+            case .signedIn:
                 MainTabBar()
                     .task {
-                        // csak egyszer indítsd el betöltésre
-                        if !profileStore.isLoaded {
-                            await profileStore.start()
-                        }
+                        if !profileStore.isLoaded { await profileStore.start() }
                     }
-            } else {
-                LoginView()
+                    // NINCS külön @State; az isPresented közvetlenül a store-ból számol
+                    .fullScreenCover(
+                        isPresented: Binding(
+                            get: {
+                                Auth.auth().currentUser != nil &&
+                                profileStore.isLoaded &&
+                                shouldShowOnboarding()
+                            },
+                            set: { _ in }
+                        )
+                    ) {
+                        OnboardingView()
+                    }
             }
         }
         .onAppear {
-            // Auth state hallgató feliratkozás
+            guard authHandle == nil else { return }
+            phase = .loading
             authHandle = Auth.auth().addStateDidChangeListener { _, user in
-                let signedIn = (user != nil)
-                if signedIn && !isSignedIn {
-                    // friss login → profil betöltés
-                    Task { await profileStore.start() }
+                if user != nil {
+                    phase = .signedIn
+                } else {
+                    profileStore.logoutReset()
+                    phase = .signedOut
                 }
-                isSignedIn = signedIn
             }
         }
         .onDisappear {
-            // Hallgató leiratkozás
             if let h = authHandle {
                 Auth.auth().removeStateDidChangeListener(h)
                 authHandle = nil
             }
         }
+    }
+
+    private func shouldShowOnboarding() -> Bool {
+        let p = profileStore.profile
+        let missingCore =
+            (p.name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ||
+            ((p.age ?? 0) <= 0)
+        return (p.onboardingCompleted != true) || missingCore
     }
 }
