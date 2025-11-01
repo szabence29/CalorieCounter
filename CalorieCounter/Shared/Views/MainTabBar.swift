@@ -3,7 +3,7 @@ import SwiftUI
 struct MainTabBar: View {
     var body: some View {
         TabView {
-            Text("Home")
+            DashboardView()
                 .tabItem {
                     Image(systemName: "house")
                     Text("Home")

@@ -1,27 +1,42 @@
 import Foundation
+import SwiftData
 
+/// Spoonacular-ból felépített modell, amely megtartja a korábbi (USDA-s) API-hoz igazodó property-ket,
+/// hogy a UI-hoz ne kelljen hozzányúlni.
 struct APIFoodItem: Identifiable, Decodable {
-    let fdcId: Int
-    let description: String
+    // ✅ A UI és a deduplikáció miatt megtartjuk ezeket az aliasokat
+    let fdcId: Int              // alias: Spoonacular id
+    let description: String     // alias: ingredient name
     var id: Int { fdcId }
 
-    // hasznos opcionális mezők a Search response-ból
-    let brandOwner: String?
+    // Opcionális mezők a UI-hoz (megtartjuk az interfészt)
+    let brandOwner: String? = nil
     let servingSize: Double?
     let servingSizeUnit: String?
-    let foodNutrients: [APINutrient]?
+    let foodNutrients: [APINutrient]? = nil
 
-    // plusz meta a “basic” finomításhoz
-    let dataType: String?        // "Survey (FNDDS)" | "Foundation" | "SR Legacy" | "Branded"
-    let foodCategory: String?    // pl. "Fruits and Fruit Juices", "Vegetables and Vegetable Products"
+    // Meta – a régi heurisztikához
+    let dataType: String? = "Spoonacular"
+    let foodCategory: String?   // pl. "fruit" (ha lesz kategória)
 
+    // Makrók (nem voltak a régi modell tetején, de jól jönnek később is)
+    let energyKcalValue: Int?
+    let protein_g: Double?
+    let fat_total_g: Double?
+    let carbohydrates_total_g: Double?
+    let fiber_g: Double?
+    let sugar_g: Double?
+
+    // Dummy a régi API-hoz igazodva (nem használjuk most)
     struct APINutrient: Decodable {
         let nutrientName: String?
         let unitName: String?
         let value: Double?
     }
 
-    /// Pl. "Agave, raw (Southwest)" -> "Agave"
+    // MARK: - Kézreálló computed-ek a meglévő UI-hoz
+
+    /// "Agave, raw (Southwest)" -> "Agave" (itt a Spoonacular `name` amúgy is tiszta)
     var primaryName: String {
         let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
         if let firstChunk = trimmed.split(separator: ",").first {
@@ -30,16 +45,10 @@ struct APIFoodItem: Identifiable, Decodable {
         return String(trimmed.split(separator: " ").first ?? Substring(trimmed))
     }
 
-    /// Kcal az Energy (kcal) tápanyagból (ha van)
-    var energyKcal: Int? {
-        guard let n = foodNutrients?
-            .first(where: { ($0.nutrientName ?? "").localizedCaseInsensitiveContains("energy")
-                         && ($0.unitName ?? "").localizedCaseInsensitiveContains("kcal") }),
-              let v = n.value else { return nil }
-        return Int(v.rounded())
-    }
+    /// Kcal megjelenítéshez
+    var energyKcal: Int? { energyKcalValue }
 
-    /// "1 cup" / "100 g" stb.
+    /// "100 g" stb.
     var servingLine: String {
         if let s = servingSize, let u = servingSizeUnit, s > 0 {
             let sText = (s == floor(s)) ? String(Int(s)) : String(s)
@@ -48,7 +57,36 @@ struct APIFoodItem: Identifiable, Decodable {
         return ""
     }
 
-    func toFoodItem() -> FoodItem {   // SwiftData entitássá alakítás
+    // MARK: - Spoonacular initializer
+
+    init(
+        spoonId: Int,
+        name: String,
+        servingSize: Double,
+        servingSizeUnit: String,
+        energyKcal: Int,
+        protein_g: Double?,
+        fat_total_g: Double?,
+        carbohydrates_total_g: Double?,
+        fiber_g: Double?,
+        sugar_g: Double?,
+        foodCategory: String? = nil
+    ) {
+        self.fdcId = spoonId
+        self.description = name
+        self.servingSize = servingSize
+        self.servingSizeUnit = servingSizeUnit
+        self.energyKcalValue = energyKcal
+        self.protein_g = protein_g
+        self.fat_total_g = fat_total_g
+        self.carbohydrates_total_g = carbohydrates_total_g
+        self.fiber_g = fiber_g
+        self.sugar_g = sugar_g
+        self.foodCategory = foodCategory
+    }
+
+    // SwiftData entitássá alakítás – megtartjuk a régi sémát
+    func toFoodItem() -> FoodItem {
         FoodItem(fdcId: fdcId, description: description)
     }
 }
