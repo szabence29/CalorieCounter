@@ -1,9 +1,97 @@
 import SwiftUI
 
+// MARK: - Date helpers
+
+extension Date {
+    func adding(days: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: days, to: self) ?? self
+    }
+    func stripped() -> Date { Calendar.current.startOfDay(for: self) }
+    var isToday: Bool { Calendar.current.isDateInToday(self) }
+    var displayTitle: String {
+        let f = DateFormatter()
+        f.locale = .current
+        f.setLocalizedDateFormatFromTemplate("MMM d, EEEE")
+        return f.string(from: self)
+    }
+    var shortMealsHeader: String {
+        let f = DateFormatter()
+        f.locale = .current
+        f.setLocalizedDateFormatFromTemplate("MMM d")
+        return f.string(from: self)
+    }
+}
+
+// MARK: - Date pager (nyilak + tappolható dátum + sheet picker)
+// Nem módosít közvetlenül dátumot; a szülőnek jelez (onPrev/onNext/onPick)
+
+struct DatePager: View {
+    let date: Date
+    let onPrev: () -> Void
+    let onNext: () -> Void
+    let onPick: (Date) -> Void
+
+    @State private var showPicker = false
+    @State private var pickerDate: Date = .now
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                onPrev()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.title3.weight(.semibold))
+            }
+
+            Button {
+                pickerDate = date
+                showPicker = true
+            } label: {
+                Text(date.displayTitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(Capsule())
+            }
+            .sheet(isPresented: $showPicker) {
+                VStack {
+                    DatePicker(
+                        "Pick a day",
+                        selection: $pickerDate,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.graphical)
+                    .padding()
+
+                    Button("Use this day") {
+                        onPick(pickerDate)
+                        showPicker = false
+                    }
+                    .padding(.bottom, 12)
+                }
+                .presentationDetents([.medium, .large])
+            }
+
+            Spacer()
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                onNext()
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.title3.weight(.semibold))
+            }
+        }
+    }
+}
+
 // MARK: - Dashboard főnézet
 
 struct DashboardView: View {
-    // — Mintaadatok (később könnyen köthető profil/SwiftData adatokhoz)
+    // — Mintaadatok (később köthető profil/SwiftData adatokhoz)
     let goalCalories: Double = 2200
     let consumedCalories: Double = 200
     let carbsG: Double = 206
@@ -15,106 +103,161 @@ struct DashboardView: View {
     let targetProtein: Double = 120
     let targetFat: Double = 80
 
+    // kiválasztott nap + animáció iránya
+    @State private var selectedDate: Date = Date().stripped()
+    enum SwipeDir { case left, right } // left = előre (jövő), right = vissza (múlt)
+    @State private var lastSwipe: SwipeDir = .left
+
     var progress: Double { min(consumedCalories / goalCalories, 1.0) }
     var remaining: Int { max(Int(goalCalories - consumedCalories), 0) }
+
+    private let swipeThreshold: CGFloat = 60
+
+    // Központosított léptetés – itt állítjuk az irányt és a dátumot is
+    private func step(days: Int) {
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) {
+            if days > 0 { lastSwipe = .left } else { lastSwipe = .right }
+            selectedDate = selectedDate.adding(days: days)
+        }
+    }
+
+    private func pick(_ newDate: Date) {
+        let new = newDate.stripped()
+        guard new != selectedDate else { return }
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) {
+            lastSwipe = (new > selectedDate) ? .left : .right
+            selectedDate = new
+        }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                // Fejléc
-                VStack(alignment: .leading, spacing: 6) {
+
+                // Fejléc + dátumnavigátor
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Dashboard")
                         .font(.system(size: 32, weight: .bold))
-                    Text(Date.now.formatted(.dateTime.weekday().month().day()))
-                        .foregroundStyle(.secondary)
+
+                    DatePager(
+                        date: selectedDate,
+                        onPrev: { step(days: -1) },
+                        onNext: { step(days: +1) },
+                        onPick: { pick($0) }
+                    )
                 }
                 .padding(.top, 8)
 
-                // Napi összegző kártya
-                SurfaceCard {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            Text("Daily Progress").font(.headline)
-                            Spacer()
-                            Text("\(Int((progress * 100).rounded())) %")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.green)
-                        }
-
-                        HalfRingProgress(progress: progress)
-                            .frame(height: 180)
-                            .overlay {
-                                VStack(spacing: 6) {
-                                    Text("\(remaining)")
-                                        .font(.system(size: 44, weight: .bold))
-                                    Text("calories remaining")
-                                        .foregroundStyle(.secondary)
-                                        .font(.subheadline)
-                                }
-                                .offset(y: 10)
+                // ===== NAPI TARTALOM – aszimmetrikus be/kiúszás irány szerint =====
+                Group {
+                    // Napi összegző kártya
+                    SurfaceCard {
+                        VStack(alignment: .leading, spacing: 16) {
+                            HStack {
+                                Text("Daily Progress").font(.headline)
+                                Spacer()
+                                Text("\(Int((progress * 100).rounded())) %")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.green)
+                                    .contentTransition(.numericText()) // iOS 17+
                             }
 
-                        Text(progress < 1 ? "Keep up the good work!" : "Goal reached 🎉")
-                            .font(.subheadline)
-                            .foregroundStyle(.green)
-                            .frame(maxWidth: .infinity, alignment: .center)
+                            HalfRingProgress(progress: progress)
+                                .frame(height: 180)
+                                .overlay {
+                                    VStack(spacing: 6) {
+                                        Text("\(remaining)")
+                                            .font(.system(size: 44, weight: .bold))
+                                            .contentTransition(.numericText()) // iOS 17+
+                                        Text("calories remaining")
+                                            .foregroundStyle(.secondary)
+                                            .font(.subheadline)
+                                    }
+                                    .offset(y: 10)
+                                }
 
-                        HStack(spacing: 16) {
-                            MiniStat(title: "Consumed", value: "\(Int(consumedCalories))")
-                            MiniStat(title: "Goal", value: "\(Int(goalCalories))")
-                        }
+                            Text(progress < 1 ? "Keep up the good work!" : "Goal reached 🎉")
+                                .font(.subheadline)
+                                .foregroundStyle(.green)
+                                .frame(maxWidth: .infinity, alignment: .center)
 
-                        VStack(spacing: 14) {
-                            MacroBar(label: "Carbs", value: carbsG, target: targetCarbs)
-                            MacroBar(label: "Protein", value: proteinG, target: targetProtein)
-                            MacroBar(label: "Fat", value: fatG, target: targetFat)
+                            HStack(spacing: 16) {
+                                MiniStat(title: "Consumed", value: "\(Int(consumedCalories))")
+                                MiniStat(title: "Goal", value: "\(Int(goalCalories))")
+                            }
+
+                            VStack(spacing: 14) {
+                                MacroBar(label: "Carbs", value: carbsG, target: targetCarbs)
+                                MacroBar(label: "Protein", value: proteinG, target: targetProtein)
+                                MacroBar(label: "Fat", value: fatG, target: targetFat)
+                            }
+                            .padding(.top, 4)
                         }
-                        .padding(.top, 4)
+                    }
+
+                    // Napi étkezések fejléc
+                    HStack {
+                        Text(selectedDate.isToday ? "Today's Meals" : "\(selectedDate.shortMealsHeader) • Meals")
+                            .font(.headline)
+                        Spacer()
+                        Button { /* See all for selectedDate */ } label: {
+                            HStack(spacing: 4) {
+                                Text("See all")
+                                Image(systemName: "chevron.right").font(.caption)
+                            }
+                        }
+                    }
+
+                    // Példa kártyák (a selectedDate-hez köthető lekéréseknek itt a helye)
+                    SurfaceCard {
+                        MealRow(
+                            title: "Breakfast",
+                            time: "8:30 AM",
+                            totalCals: 420,
+                            items: [
+                                .init(name: "Oatmeal with berries", cals: 320),
+                                .init(name: "Black coffee", cals: 5),
+                                .init(name: "Greek yogurt", cals: 95),
+                            ]
+                        )
+                    }
+
+                    SurfaceCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Lunch").font(.headline)
+                                Spacer()
+                                Text("650 cal").font(.headline)
+                            }
+                            Text("Chicken bowl, rice, salad")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
-
-                // Mai étkezések
-                HStack {
-                    Text("Today's Meals").font(.headline)
-                    Spacer()
-                    Button { } label: {
-                        HStack(spacing: 4) {
-                            Text("See all")
-                            Image(systemName: "chevron.right").font(.caption)
-                        }
-                    }
-                }
-
-                SurfaceCard {
-                    MealRow(
-                        title: "Breakfast",
-                        time: "8:30 AM",
-                        totalCals: 420,
-                        items: [
-                            .init(name: "Oatmeal with berries", cals: 320),
-                            .init(name: "Black coffee", cals: 5),
-                            .init(name: "Greek yogurt", cals: 95),
-                        ]
-                    )
-                }
-
-                SurfaceCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Lunch").font(.headline)
-                            Spacer()
-                            Text("650 cal").font(.headline)
-                        }
-                        Text("Chicken bowl, rice, salad")
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                // az egész “nap tartalma” egyazon azonosítóval
+                .id(selectedDate)
+                .transition(.asymmetric(
+                    insertion: .move(edge: lastSwipe == .left ? .trailing : .leading).combined(with: .opacity),
+                    removal:   .move(edge: lastSwipe == .left ? .leading  : .trailing).combined(with: .opacity)
+                ))
+                .animation(.spring(response: 0.45, dampingFraction: 0.9), value: selectedDate)
 
                 Spacer(minLength: 24)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
         }
+        // Swipe – csak vízszintes gesztusra léptetünk (nem akad a scrollba)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onEnded { value in
+                    let dx = value.translation.width
+                    let dy = value.translation.height
+                    guard abs(dx) > abs(dy), abs(dx) > swipeThreshold else { return }
+                    if dx < 0 { step(days: +1) } else { step(days: -1) }
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+        )
         .background(Color(.systemGroupedBackground))
     }
 }
@@ -216,13 +359,11 @@ struct HalfRingProgress: View {
 
     var body: some View {
         ZStack {
-            // Háttér félkör (0..0.5 a kör fele)
             Circle()
                 .trim(from: 0.0, to: 0.5)
                 .rotation(.degrees(180))
                 .stroke(Color(.systemGray4), style: StrokeStyle(lineWidth: thickness, lineCap: .butt))
 
-            // Kitöltött rész
             Circle()
                 .trim(from: 0.0, to: max(0.001, progress) * 0.5)
                 .rotation(.degrees(180))
@@ -233,7 +374,9 @@ struct HalfRingProgress: View {
     }
 }
 
+// MARK: - Preview
 
 #Preview {
     DashboardView()
+        .preferredColorScheme(.light)
 }

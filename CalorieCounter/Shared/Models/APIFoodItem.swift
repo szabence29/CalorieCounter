@@ -19,13 +19,16 @@ struct APIFoodItem: Identifiable, Decodable {
     let dataType: String? = "Spoonacular"
     let foodCategory: String?   // pl. "fruit" (ha lesz kategória)
 
-    // Makrók (nem voltak a régi modell tetején, de jól jönnek később is)
+    // Makrók
     let energyKcalValue: Int?
     let protein_g: Double?
     let fat_total_g: Double?
     let carbohydrates_total_g: Double?
     let fiber_g: Double?
     let sugar_g: Double?
+
+    // ⬇️ ÚJ: kép URL a Spoonacular CDN-re
+    let imageUrl: URL?
 
     // Dummy a régi API-hoz igazodva (nem használjuk most)
     struct APINutrient: Decodable {
@@ -36,7 +39,6 @@ struct APIFoodItem: Identifiable, Decodable {
 
     // MARK: - Kézreálló computed-ek a meglévő UI-hoz
 
-    /// "Agave, raw (Southwest)" -> "Agave" (itt a Spoonacular `name` amúgy is tiszta)
     var primaryName: String {
         let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
         if let firstChunk = trimmed.split(separator: ",").first {
@@ -45,10 +47,8 @@ struct APIFoodItem: Identifiable, Decodable {
         return String(trimmed.split(separator: " ").first ?? Substring(trimmed))
     }
 
-    /// Kcal megjelenítéshez
     var energyKcal: Int? { energyKcalValue }
 
-    /// "100 g" stb.
     var servingLine: String {
         if let s = servingSize, let u = servingSizeUnit, s > 0 {
             let sText = (s == floor(s)) ? String(Int(s)) : String(s)
@@ -70,7 +70,8 @@ struct APIFoodItem: Identifiable, Decodable {
         carbohydrates_total_g: Double?,
         fiber_g: Double?,
         sugar_g: Double?,
-        foodCategory: String? = nil
+        foodCategory: String? = nil,
+        imageUrl: URL? = nil
     ) {
         self.fdcId = spoonId
         self.description = name
@@ -83,6 +84,7 @@ struct APIFoodItem: Identifiable, Decodable {
         self.fiber_g = fiber_g
         self.sugar_g = sugar_g
         self.foodCategory = foodCategory
+        self.imageUrl = imageUrl
     }
 
     // SwiftData entitássá alakítás – megtartjuk a régi sémát

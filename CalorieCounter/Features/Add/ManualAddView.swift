@@ -16,6 +16,7 @@ struct ManualAddView: View {
 
     @State private var searchText = ""
     @State private var selectedMeal: MealType = .breakfast
+    @State private var selectedDate: Date = Calendar.current.startOfDay(for: Date())
 
     var body: some View {
         NavigationStack {
@@ -26,17 +27,19 @@ struct ManualAddView: View {
                         if viewModel.items.isEmpty {
                             PlaceholderCard().padding(.top, 40)
                         } else {
-                            ForEach(viewModel.groupedByName) { group in
+                            // ✅ NINCS köztes grouping – közvetlenül az itemeket listázzuk
+                            ForEach(viewModel.items) { item in
                                 NavigationLink {
-                                    VariantsView(
-                                        title: group.name,
-                                        items: group.items,
-                                        onAdd: { item in
-                                            viewModel.saveToDatabase(item: item, context: modelContext)
-                                        }
-                                    )
+                                    FoodDetailView(
+                                        item: item,
+                                        defaultMeal: selectedMeal,
+                                        defaultDate: selectedDate
+                                    ) { it, grams, meal, date in
+                                        viewModel.saveToDatabase(item: it, context: modelContext)
+                                        dismiss()
+                                    }
                                 } label: {
-                                    GroupCard(group: group)
+                                    FoodCard(item: item)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -51,11 +54,10 @@ struct ManualAddView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Search") { viewModel.fetchFoods(query: searchText) }
+                    Button("Search") { viewModel.fetchFoodsPaginated(query: searchText, pages: 3) }
                         .disabled(searchText.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .onAppear { if viewModel.items.isEmpty { viewModel.fetchFoods() } }
         }
     }
 
@@ -78,14 +80,14 @@ struct ManualAddView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                 TextField("Search foods…", text: $searchText, onCommit: {
-                    viewModel.fetchFoods(query: searchText)
+                    viewModel.fetchFoodsPaginated(query: searchText, pages: 3)
                 })
                 .textInputAutocapitalization(.never)
                 .disableAutocorrection(true)
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
-                        viewModel.fetchFoods(query: "")
+                        viewModel.items = []     // tisztítás
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
@@ -122,61 +124,22 @@ private struct MealChip: View {
     }
 }
 
-private struct GroupCard: View {
-    let group: FoodGroup
-
-    var body: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(group.name.uppercased())
-                    .font(.headline.weight(.semibold))
-                    .lineLimit(1)
-
-                HStack(spacing: 8) {
-                    if !group.servingSample.isEmpty {
-                        Text(group.servingSample)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    if group.count > 1 {
-                        Text("• \(group.count) variants")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            Spacer(minLength: 12)
-            VStack(spacing: 2) {
-                Text(group.kcalRangeText.components(separatedBy: " ").first ?? "—")
-                    .font(.subheadline.weight(.semibold))
-                Text("cal")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            Image(systemName: "chevron.right")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color(.tertiaryLabel))
-                .padding(.leading, 6)
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.background)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color(.quaternaryLabel), lineWidth: 0.8)
-                )
-                .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-        )
-    }
-}
-
 private struct FoodCard: View {
     let item: APIFoodItem
-    let onAdd: () -> Void
 
     var body: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 12) {
+            if let url = item.imageUrl {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let img): img.resizable().scaledToFill()
+                    default: Color(.systemGray5)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.primaryName)
                     .font(.headline)
@@ -201,15 +164,6 @@ private struct FoodCard: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.trailing, 8)
-
-            Button(action: onAdd) {
-                Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(width: 28, height: 28)
-                    .background(Color(.systemGray6))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
         }
         .padding(14)
         .background(
@@ -219,28 +173,8 @@ private struct FoodCard: View {
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(Color(.quaternaryLabel), lineWidth: 0.8)
                 )
-                .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
+                .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
         )
-    }
-}
-
-private struct VariantsView: View {
-    let title: String
-    let items: [APIFoodItem]
-    let onAdd: (APIFoodItem) -> Void
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(items) { item in
-                    FoodCard(item: item) { onAdd(item) }
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-        }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
