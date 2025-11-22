@@ -24,10 +24,9 @@ struct ManualAddView: View {
                 ChipsAndSearchBar
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        if viewModel.items.isEmpty {
+                        if viewModel.items.isEmpty && !viewModel.isLoading {
                             PlaceholderCard().padding(.top, 40)
                         } else {
-                            // ✅ NINCS köztes grouping – közvetlenül az itemeket listázzuk
                             ForEach(viewModel.items) { item in
                                 NavigationLink {
                                     FoodDetailView(
@@ -49,13 +48,27 @@ struct ManualAddView: View {
                     .padding(.bottom, 16)
                 }
             }
+            // Nagy overlay, ha még nincs lista és töltünk
+            .overlay {
+                if viewModel.isLoading && viewModel.items.isEmpty {
+                    LoadingOverlay(title: "Searching…")
+                }
+            }
             .navigationTitle("Add foods")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Search") { viewModel.fetchFoodsPaginated(query: searchText, pages: 3) }
+                    if viewModel.isLoading {
+                        ProgressView()
+                    } else {
+                        Button("Search") {
+                            viewModel.fetchFoodsPaginated(query: searchText, pages: 1)
+                        }
                         .disabled(searchText.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
                 }
             }
         }
@@ -80,18 +93,23 @@ struct ManualAddView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                 TextField("Search foods…", text: $searchText, onCommit: {
-                    viewModel.fetchFoodsPaginated(query: searchText, pages: 3)
+                    viewModel.fetchFoodsPaginated(query: searchText, pages: 1)
                 })
                 .textInputAutocapitalization(.never)
                 .disableAutocorrection(true)
+                .disabled(viewModel.isLoading)
+                .opacity(viewModel.isLoading ? 0.6 : 1)
+                
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
-                        viewModel.items = []     // tisztítás
+                        viewModel.items = []
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
                     }
+                    .disabled(viewModel.isLoading)
+                    .opacity(viewModel.isLoading ? 0.6 : 1)
                 }
             }
             .padding(12)
@@ -191,3 +209,20 @@ private struct PlaceholderCard: View {
         .background(RoundedRectangle(cornerRadius: 14).fill(Color(.systemGray6)))
     }
 }
+
+private struct LoadingOverlay: View {
+    let title: String
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .scaleEffect(1.2)
+            Text(title)
+                .font(.headline)
+        }
+        .padding(20)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(radius: 10)
+        .accessibilityIdentifier("loadingOverlay")
+    }
+}
+

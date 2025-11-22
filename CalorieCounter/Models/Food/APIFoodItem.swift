@@ -1,33 +1,35 @@
 import Foundation
 import SwiftData
 
-/// Spoonacular-ból felépített modell, amely megtartja a korábbi (USDA-s) API-hoz igazodó property-ket,
-/// hogy a UI-hoz ne kelljen hozzányúlni.
+/// Spoonacular-ból felépített modell (USDA kompatibilis mezőnevekkel, hogy a UI-hoz ne kelljen nyúlni).
 struct APIFoodItem: Identifiable, Decodable {
-    // ✅ A UI és a deduplikáció miatt megtartjuk ezeket az aliasokat
-    let fdcId: Int              // alias: Spoonacular id
-    let description: String     // alias: ingredient name
+    // Egyedi azonosító
+    let fdcId: Int                     // = Spoonacular id
     var id: Int { fdcId }
+    var spoonId: Int { fdcId }         // ⬅️ alias a ViewModel-hez
 
-    // Opcionális mezők a UI-hoz (megtartjuk az interfészt)
+    // Megjelenített név
+    let description: String            // = Ingredient name
+
+    // Opcionális UI-mezők (régi interfész)
     let brandOwner: String? = nil
     let servingSize: Double?
     let servingSizeUnit: String?
     let foodNutrients: [APINutrient]? = nil
 
-    // Meta – a régi heurisztikához
+    // Meta
     let dataType: String? = "Spoonacular"
-    let foodCategory: String?   // pl. "fruit" (ha lesz kategória)
+    let foodCategory: String?
 
     // Makrók
-    let energyKcalValue: Int?
+    let energyKcalValue: Int?          // ⬅️ belső tároló (nil lehet a “light” állapotban)
     let protein_g: Double?
     let fat_total_g: Double?
     let carbohydrates_total_g: Double?
     let fiber_g: Double?
     let sugar_g: Double?
 
-    // ⬇️ ÚJ: kép URL a Spoonacular CDN-re
+    // Kép
     let imageUrl: URL?
 
     // Dummy a régi API-hoz igazodva (nem használjuk most)
@@ -37,13 +39,11 @@ struct APIFoodItem: Identifiable, Decodable {
         let value: Double?
     }
 
-    // MARK: - Kézreálló computed-ek a meglévő UI-hoz
+    // MARK: - Computed-ek a meglévő UI-hoz
 
     var primaryName: String {
         let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let firstChunk = trimmed.split(separator: ",").first {
-            return String(firstChunk)
-        }
+    if let firstChunk = trimmed.split(separator: ",").first { return String(firstChunk) }
         return String(trimmed.split(separator: " ").first ?? Substring(trimmed))
     }
 
@@ -64,7 +64,7 @@ struct APIFoodItem: Identifiable, Decodable {
         name: String,
         servingSize: Double,
         servingSizeUnit: String,
-        energyKcal: Int,
+        energyKcal: Int?,                 // ⬅️ legyen optional, hogy a “light” rekordnál mehessen nil
         protein_g: Double?,
         fat_total_g: Double?,
         carbohydrates_total_g: Double?,

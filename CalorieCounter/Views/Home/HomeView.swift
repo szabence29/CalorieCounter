@@ -43,5 +43,4 @@ struct SplashScreen: View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
