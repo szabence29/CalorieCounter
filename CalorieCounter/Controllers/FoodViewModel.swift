@@ -2,40 +2,7 @@ import Foundation
 import SwiftData
 import Network
 
-// MARK: - Spoonacular DTO-k
-
-private struct IngredientSearchResponse: Decodable {
-    let results: [IngredientResult]
-    let totalResults: Int?
-}
-
-private struct IngredientResult: Decodable {
-    let id: Int
-    let name: String
-    let image: String?
-}
-
-private struct IngredientInfoResponse: Decodable {
-    let id: Int
-    let name: String
-    let amount: Double?
-    let unit: String?
-    let nutrition: NutritionInfo
-    let image: String?
-}
-
-private struct NutritionInfo: Decodable {
-    let nutrients: [Nutrient]
-}
-
-private struct Nutrient: Decodable {
-    let name: String
-    let amount: Double
-    let unit: String
-}
-
-// MARK: - ViewModel (async/await, soros dúsítás, 429-kezelés)
-
+// MARK: - ViewModel
 @MainActor
 final class FoodViewModel: ObservableObject {
 
@@ -46,7 +13,14 @@ final class FoodViewModel: ObservableObject {
     @Published var isOnline = true
 
     // API
-    private let apiKey = "d6b322b71b24422b83d4e9ee299d6d8f"     // vidd .xcconfig-be
+    private let apiKey: String = {
+            guard let key = Bundle.main.object(forInfoDictionaryKey: "SPOONACULAR_API_KEY") as? String,
+                  !key.isEmpty else {
+                fatalError("SPOONACULAR_API_KEY missing from Info.plist / xcconfig")
+            }
+            return key
+        }()
+    
     private let baseURL = URL(string: "https://api.spoonacular.com")!
 
     // Keresési beállítások
@@ -93,6 +67,17 @@ final class FoodViewModel: ObservableObject {
 
     func saveToDatabase(item: APIFoodItem, context: ModelContext) {
         context.insert(item.toFoodItem())
+    }
+    
+    func addLogEntry(
+        for item: APIFoodItem,
+        grams: Double,
+        meal: MealType,
+        date: Date,
+        context: ModelContext
+    ) {
+        let entry = FoodLogEntry(from: item, grams: grams, meal: meal, date: date)
+        context.insert(entry)
     }
 
     // MARK: - Implementáció

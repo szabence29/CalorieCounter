@@ -1,14 +1,6 @@
 import SwiftUI
 import SwiftData
 
-enum MealType: String, CaseIterable, Identifiable {
-    case breakfast = "Breakfast"
-    case lunch = "Lunch"
-    case dinner = "Dinner"
-    case snack = "Snack"
-    var id: String { rawValue }
-}
-
 struct ManualAddView: View {
     @ObservedObject var viewModel: FoodViewModel
     @Environment(\.modelContext) private var modelContext
@@ -25,7 +17,8 @@ struct ManualAddView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         if viewModel.items.isEmpty && !viewModel.isLoading {
-                            PlaceholderCard().padding(.top, 40)
+                            PlaceholderCard()
+                                .padding(.top, 40)
                         } else {
                             ForEach(viewModel.items) { item in
                                 NavigationLink {
@@ -34,7 +27,13 @@ struct ManualAddView: View {
                                         defaultMeal: selectedMeal,
                                         defaultDate: selectedDate
                                     ) { it, grams, meal, date in
-                                        viewModel.saveToDatabase(item: it, context: modelContext)
+                                        viewModel.addLogEntry(
+                                            for: it,
+                                            grams: grams,
+                                            meal: meal,
+                                            date: date,
+                                            context: modelContext
+                                        )
                                         dismiss()
                                     }
                                 } label: {
@@ -74,13 +73,17 @@ struct ManualAddView: View {
         }
     }
 
-    // MARK: top – chips + kereső
+    // MARK: - Top – chips + kereső
+
     private var ChipsAndSearchBar: some View {
         VStack(spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(MealType.allCases) { meal in
-                        MealChip(title: meal.rawValue, isSelected: meal == selectedMeal) {
+                        MealChip(
+                            title: meal.rawValue,
+                            isSelected: meal == selectedMeal
+                        ) {
                             selectedMeal = meal
                         }
                     }
@@ -92,14 +95,18 @@ struct ManualAddView: View {
 
             HStack {
                 Image(systemName: "magnifyingglass")
-                TextField("Search foods…", text: $searchText, onCommit: {
-                    viewModel.fetchFoodsPaginated(query: searchText, pages: 1)
-                })
+                TextField(
+                    "Search foods…",
+                    text: $searchText,
+                    onCommit: {
+                        viewModel.fetchFoodsPaginated(query: searchText, pages: 1)
+                    }
+                )
                 .textInputAutocapitalization(.never)
                 .disableAutocorrection(true)
                 .disabled(viewModel.isLoading)
                 .opacity(viewModel.isLoading ? 0.6 : 1)
-                
+
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
@@ -150,8 +157,10 @@ private struct FoodCard: View {
             if let url = item.imageUrl {
                 AsyncImage(url: url) { phase in
                     switch phase {
-                    case .success(let img): img.resizable().scaledToFill()
-                    default: Color(.systemGray5)
+                    case .success(let img):
+                        img.resizable().scaledToFill()
+                    default:
+                        Color(.systemGray5)
                     }
                 }
                 .frame(width: 44, height: 44)
@@ -163,7 +172,10 @@ private struct FoodCard: View {
                     .font(.headline)
                     .lineLimit(1)
 
-                let subtitle = item.servingLine.isEmpty ? (item.brandOwner ?? "") : item.servingLine
+                let subtitle = item.servingLine.isEmpty
+                    ? (item.brandOwner ?? "")
+                    : item.servingLine
+
                 if !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.caption)
@@ -199,14 +211,18 @@ private struct FoodCard: View {
 private struct PlaceholderCard: View {
     var body: some View {
         VStack(spacing: 8) {
-            Text("Search foods to get started").font(.headline)
+            Text("Search foods to get started")
+                .font(.headline)
             Text("Try typing e.g. “banana”, “oatmeal”, “yogurt”…")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(20)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(.systemGray6)))
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(.systemGray6))
+        )
     }
 }
 
@@ -220,9 +236,11 @@ private struct LoadingOverlay: View {
                 .font(.headline)
         }
         .padding(20)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
         .shadow(radius: 10)
         .accessibilityIdentifier("loadingOverlay")
     }
 }
-

@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // MARK: - Date helpers
 
@@ -22,8 +23,7 @@ extension Date {
     }
 }
 
-// MARK: - Date pager (nyilak + tappolható dátum + sheet picker)
-// Nem módosít közvetlenül dátumot; a szülőnek jelez (onPrev/onNext/onPick)
+// MARK: - Date pager
 
 struct DatePager: View {
     let date: Date
@@ -91,29 +91,65 @@ struct DatePager: View {
 // MARK: - Dashboard főnézet
 
 struct DashboardView: View {
-    // — Mintaadatok (később köthető profil/SwiftData adatokhoz)
-    let goalCalories: Double = 2200
-    let consumedCalories: Double = 200
-    let carbsG: Double = 206
-    let proteinG: Double = 35
-    let fatG: Double = 32
+    // SwiftData
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \FoodLogEntry.date, order: .forward)
+    private var allLogs: [FoodLogEntry]
 
-    // csak az arányokhoz célok
-    let targetCarbs: Double = 300
-    let targetProtein: Double = 120
-    let targetFat: Double = 80
-
-    // kiválasztott nap + animáció iránya
     @State private var selectedDate: Date = Date().stripped()
-    enum SwipeDir { case left, right } // left = előre (jövő), right = vissza (múlt)
+    enum SwipeDir { case left, right }
     @State private var lastSwipe: SwipeDir = .left
 
-    var progress: Double { min(consumedCalories / goalCalories, 1.0) }
-    var remaining: Int { max(Int(goalCalories - consumedCalories), 0) }
+    // kalóriacél – egyelőre fix, később jöhet UserProfile-ból
+    let goalCalories: Double = 2200
 
     private let swipeThreshold: CGFloat = 60
 
-    // Központosított léptetés – itt állítjuk az irányt és a dátumot is
+    // MARK: - Napi aggregált adatok (SwiftData-ból)
+
+    var logsForSelectedDay: [FoodLogEntry] {
+        allLogs.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
+    }
+
+    var consumedCalories: Double {
+        logsForSelectedDay.reduce(0) { $0 + Double($1.energyKcal) }
+    }
+
+    var carbsG: Double {
+        logsForSelectedDay.reduce(0) { $0 + ($1.carbs_g ?? 0) }
+    }
+
+    var proteinG: Double {
+        logsForSelectedDay.reduce(0) { $0 + ($1.protein_g ?? 0) }
+    }
+
+    var fatG: Double {
+        logsForSelectedDay.reduce(0) { $0 + ($1.fat_g ?? 0) }
+    }
+
+    var progress: Double {
+        goalCalories > 0 ? min(consumedCalories / goalCalories, 1.0) : 0
+    }
+
+    var remaining: Int {
+        max(Int(goalCalories - consumedCalories), 0)
+    }
+
+
+    func logs(for meal: MealType) -> [FoodLogEntry] {
+        logsForSelectedDay.filter { $0.meal == meal }
+    }
+
+    func totalCalories(for meal: MealType) -> Int {
+        logs(for: meal).reduce(0) { $0 + $1.energyKcal }
+    }
+
+    func mealItems(for meal: MealType) -> [MealItem] {
+        logs(for: meal).map { entry in
+            MealItem(name: entry.name, cals: entry.energyKcal)
+        }
+    }
+
     private func step(days: Int) {
         withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) {
             if days > 0 { lastSwipe = .left } else { lastSwipe = .right }
@@ -134,7 +170,6 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
 
-                // Fejléc + dátumnavigátor
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Dashboard")
                         .font(.system(size: 32, weight: .bold))
@@ -148,18 +183,17 @@ struct DashboardView: View {
                 }
                 .padding(.top, 8)
 
-                // ===== NAPI TARTALOM – aszimmetrikus be/kiúszás irány szerint =====
                 Group {
-                    // Napi összegző kártya
                     SurfaceCard {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
-                                Text("Daily Progress").font(.headline)
+                                Text("Daily Progress")
+                                    .font(.headline)
                                 Spacer()
                                 Text("\(Int((progress * 100).rounded())) %")
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.green)
-                                    .contentTransition(.numericText()) // iOS 17+
+                                    .contentTransition(.numericText())
                             }
 
                             HalfRingProgress(progress: progress)
@@ -168,7 +202,7 @@ struct DashboardView: View {
                                     VStack(spacing: 6) {
                                         Text("\(remaining)")
                                             .font(.system(size: 44, weight: .bold))
-                                            .contentTransition(.numericText()) // iOS 17+
+                                            .contentTransition(.numericText())
                                         Text("calories remaining")
                                             .foregroundStyle(.secondary)
                                             .font(.subheadline)
@@ -182,63 +216,106 @@ struct DashboardView: View {
                                 .frame(maxWidth: .infinity, alignment: .center)
 
                             HStack(spacing: 16) {
-                                MiniStat(title: "Consumed", value: "\(Int(consumedCalories))")
-                                MiniStat(title: "Goal", value: "\(Int(goalCalories))")
+                                MiniStat(
+                                    title: "Consumed",
+                                    value: "\(Int(consumedCalories.rounded()))"
+                                )
+                                MiniStat(
+                                    title: "Goal",
+                                    value: "\(Int(goalCalories))"
+                                )
                             }
 
                             VStack(spacing: 14) {
-                                MacroBar(label: "Carbs", value: carbsG, target: targetCarbs)
-                                MacroBar(label: "Protein", value: proteinG, target: targetProtein)
-                                MacroBar(label: "Fat", value: fatG, target: targetFat)
+                                MacroBar(
+                                    label: "Carbs",
+                                    value: carbsG,
+                                    target: 300
+                                )
+                                MacroBar(
+                                    label: "Protein",
+                                    value: proteinG,
+                                    target: 120
+                                )
+                                MacroBar(
+                                    label: "Fat",
+                                    value: fatG,
+                                    target: 80
+                                )
                             }
                             .padding(.top, 4)
                         }
                     }
 
-                    // Napi étkezések fejléc
                     HStack {
-                        Text(selectedDate.isToday ? "Today's Meals" : "\(selectedDate.shortMealsHeader) • Meals")
-                            .font(.headline)
+                        Text(selectedDate.isToday
+                             ? "Today's Meals"
+                             : "\(selectedDate.shortMealsHeader) • Meals"
+                        )
+                        .font(.headline)
                         Spacer()
-                        Button { /* See all for selectedDate */ } label: {
-                            HStack(spacing: 4) {
-                                Text("See all")
-                                Image(systemName: "chevron.right").font(.caption)
+                    }
+
+                    if logsForSelectedDay.isEmpty {
+                        Text("No meals logged for this day yet.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        // Breakfast
+                        if !logs(for: .breakfast).isEmpty {
+                            SurfaceCard {
+                                MealRow(
+                                    title: "Breakfast",
+                                    time: selectedDate.isToday ? "Today" : "",
+                                    totalCals: totalCalories(for: .breakfast),
+                                    items: mealItems(for: .breakfast)
+                                )
                             }
                         }
-                    }
 
-                    // Példa kártyák (a selectedDate-hez köthető lekéréseknek itt a helye)
-                    SurfaceCard {
-                        MealRow(
-                            title: "Breakfast",
-                            time: "8:30 AM",
-                            totalCals: 420,
-                            items: [
-                                .init(name: "Oatmeal with berries", cals: 320),
-                                .init(name: "Black coffee", cals: 5),
-                                .init(name: "Greek yogurt", cals: 95),
-                            ]
-                        )
-                    }
-
-                    SurfaceCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Lunch").font(.headline)
-                                Spacer()
-                                Text("650 cal").font(.headline)
+                        // Lunch
+                        if !logs(for: .lunch).isEmpty {
+                            SurfaceCard {
+                                MealRow(
+                                    title: "Lunch",
+                                    time: selectedDate.isToday ? "Today" : "",
+                                    totalCals: totalCalories(for: .lunch),
+                                    items: mealItems(for: .lunch)
+                                )
                             }
-                            Text("Chicken bowl, rice, salad")
-                                .foregroundStyle(.secondary)
+                        }
+
+                        // Dinner
+                        if !logs(for: .dinner).isEmpty {
+                            SurfaceCard {
+                                MealRow(
+                                    title: "Dinner",
+                                    time: selectedDate.isToday ? "Today" : "",
+                                    totalCals: totalCalories(for: .dinner),
+                                    items: mealItems(for: .dinner)
+                                )
+                            }
+                        }
+
+                        // Snack
+                        if !logs(for: .snack).isEmpty {
+                            SurfaceCard {
+                                MealRow(
+                                    title: "Snack",
+                                    time: selectedDate.isToday ? "Today" : "",
+                                    totalCals: totalCalories(for: .snack),
+                                    items: mealItems(for: .snack)
+                                )
+                            }
                         }
                     }
                 }
-                // az egész “nap tartalma” egyazon azonosítóval
                 .id(selectedDate)
                 .transition(.asymmetric(
-                    insertion: .move(edge: lastSwipe == .left ? .trailing : .leading).combined(with: .opacity),
-                    removal:   .move(edge: lastSwipe == .left ? .leading  : .trailing).combined(with: .opacity)
+                    insertion: .move(edge: lastSwipe == .left ? .trailing : .leading)
+                        .combined(with: .opacity),
+                    removal: .move(edge: lastSwipe == .left ? .leading  : .trailing)
+                        .combined(with: .opacity)
                 ))
                 .animation(.spring(response: 0.45, dampingFraction: 0.9), value: selectedDate)
 
@@ -247,7 +324,6 @@ struct DashboardView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
         }
-        // Swipe – csak vízszintes gesztusra léptetünk (nem akad a scrollba)
         .simultaneousGesture(
             DragGesture(minimumDistance: 20, coordinateSpace: .local)
                 .onEnded { value in
@@ -280,8 +356,11 @@ struct MiniStat: View {
     let value: String
     var body: some View {
         VStack(spacing: 8) {
-            Text(title).font(.subheadline).foregroundStyle(.secondary)
-            Text(value).font(.title2.weight(.bold))
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title2.weight(.bold))
         }
         .frame(maxWidth: .infinity)
         .padding()
@@ -302,7 +381,8 @@ struct MacroBar: View {
             HStack {
                 Text(label).font(.caption)
                 Spacer()
-                Text("\(Int(value))g").font(.caption.weight(.semibold))
+                Text("\(Int(value.rounded()))g")
+                    .font(.caption.weight(.semibold))
             }
             ZstackBar(ratio: ratio)
                 .frame(height: 6)
@@ -337,15 +417,24 @@ struct MealRow: View {
                 Spacer()
                 Text("\(totalCals) cal").font(.headline)
             }
-            Text(time).font(.caption).foregroundStyle(.secondary)
-            Divider().padding(.vertical, 4)
-            ForEach(items.indices, id: \.self) { i in
-                HStack {
-                    Text(items[i].name)
-                    Spacer()
-                    Text("\(items[i].cals) cal").foregroundStyle(.secondary)
+            if !time.isEmpty {
+                Text(time)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if !items.isEmpty {
+                Divider().padding(.vertical, 4)
+                ForEach(items.indices, id: \.self) { i in
+                    HStack {
+                        Text(items[i].name)
+                        Spacer()
+                        Text("\(items[i].cals) cal")
+                            .foregroundStyle(.secondary)
+                    }
+                    if i != items.indices.last {
+                        Divider().opacity(0.4)
+                    }
                 }
-                if i != items.indices.last { Divider().opacity(0.4) }
             }
         }
     }
@@ -362,12 +451,18 @@ struct HalfRingProgress: View {
             Circle()
                 .trim(from: 0.0, to: 0.5)
                 .rotation(.degrees(180))
-                .stroke(Color(.systemGray4), style: StrokeStyle(lineWidth: thickness, lineCap: .butt))
+                .stroke(
+                    Color(.systemGray4),
+                    style: StrokeStyle(lineWidth: thickness, lineCap: .butt)
+                )
 
             Circle()
                 .trim(from: 0.0, to: max(0.001, progress) * 0.5)
                 .rotation(.degrees(180))
-                .stroke(.primary, style: StrokeStyle(lineWidth: thickness, lineCap: .round))
+                .stroke(
+                    .primary,
+                    style: StrokeStyle(lineWidth: thickness, lineCap: .round)
+                )
         }
         .frame(height: 180)
         .padding(.horizontal, 24)

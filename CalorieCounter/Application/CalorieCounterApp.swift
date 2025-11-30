@@ -6,7 +6,6 @@ import FirebaseAuth
 
 @main
 struct CalorieCounterApp: App {
-    // Firebase init AppDelegate-ben (ELÉG ITT, ne hívd még egyszer init-ben)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     // ProfileStore a teljes appnak
@@ -14,7 +13,10 @@ struct CalorieCounterApp: App {
 
     // SwiftData container (maradhat ahogy volt)
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([ FoodItem.self ])
+        let schema = Schema([
+            FoodItem.self,
+            FoodLogEntry.self
+        ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
@@ -32,7 +34,6 @@ struct CalorieCounterApp: App {
     }
 }
 
-// Firebase setup – ELÓG ITT a configure()
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
         _ application: UIApplication,

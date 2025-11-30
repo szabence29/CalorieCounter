@@ -13,7 +13,7 @@ struct MainTabBar: View {
                     Image(systemName: "plus.circle")
                     Text("Add")
                 }
-            Text("Chat")
+            ContentView()
                 .tabItem {
                     Image(systemName: "bubble.left.and.bubble.right")
                     Text("Chat")
