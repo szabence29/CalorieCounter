@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Secrets
+.env
+
+# Xcode / iOS build
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+
+# Ha valaha lesz CocoaPods:
+Pods/
