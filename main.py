@@ -222,3 +222,7 @@ def benchmark_models():
         "differences": diffs,
         "full_results": results
     }
+
+@app.get("/")
+def root():
+    return {"status": "ok"}

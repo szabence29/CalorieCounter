@@ -18,7 +18,7 @@ final class ChatViewModel: ObservableObject {
 
     @Published var messages: [ChatMessage] = []
 
-    private let endpoint = URL(string: "http://127.0.0.1:8000/nl-command")!
+    private let endpoint = URL(string: "https://caloriecounter-45of.onrender.com/nl-command")!
 
     var canSend: Bool {
         !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
