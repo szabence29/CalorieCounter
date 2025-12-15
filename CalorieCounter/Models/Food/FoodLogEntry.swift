@@ -4,11 +4,10 @@ import SwiftData
 @Model
 final class FoodLogEntry {
     var id: UUID
-    var date: Date              // nap szerint (startOfDay)
-    var mealRaw: String         // "Breakfast", "Lunch" stb.
+    var date: Date
+    var mealRaw: String
     var grams: Double
 
-    // egyszerűsített „snapshot” az ételről
     var name: String
     var energyKcal: Int
     var carbs_g: Double?

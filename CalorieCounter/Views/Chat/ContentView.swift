@@ -3,98 +3,173 @@ import SwiftUI
 struct ContentView: View {
 
     @StateObject private var viewModel = ChatViewModel()
+
+    // Az a tétel, amit a kártyáról kiválasztunk
     @State private var selectedItem: NLCommandResponse.Entities.Item?
     @State private var selectedMeal: MealType = .breakfast
     @State private var selectedDate: Date = Date()
 
+    @FocusState private var isTextFocused: Bool
+
+    // Csak az utolsó asszisztens-üzenet (nem mutatjuk a user buborékot)
+    private var lastAssistantMessage: ChatMessage? {
+        viewModel.messages.last(where: { !$0.isUser && $0.parsed != nil })
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        ForEach(viewModel.messages) { message in
-                            ChatMessageRow(
-                                message: message,
-                                onItemTap: { item, mealString, dateString in
-                                    selectedItem = item
-                                    selectedMeal = MealType(fromNLString: mealString)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
 
-                                    if let ds = dateString {
-                                        let fmt = DateFormatter()
-                                        fmt.calendar = .init(identifier: .iso8601)
-                                        fmt.locale = .init(identifier: "en_US_POSIX")
-                                        fmt.dateFormat = "yyyy-MM-dd"
-                                        selectedDate = fmt.date(from: ds) ?? Date()
-                                    } else {
-                                        selectedDate = Date()
-                                    }
-                                }
-                            )
-                        }
+                    instructionsCard
+
+                    inputSection
+
+                    if let message = lastAssistantMessage,
+                       let parsed = message.parsed {
+
+                        Text("Last result")
+                            .font(.headline)
+                            .padding(.top, 8)
+
+                        AssistantParsedView(
+                            originalText: message.originalText ?? message.text,
+                            response: parsed,
+                            onItemTap: { item, mealString, dateString in
+                                handleItemTap(
+                                    item: item,
+                                    mealString: mealString,
+                                    dateString: dateString
+                                )
+                            }
+                        )
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(Color(.secondarySystemBackground))
+                        )
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 16)
+
+                    Spacer(minLength: 16)
                 }
-                .onChange(of: viewModel.messages.count) { _ in
-                    if let lastId = viewModel.messages.last?.id {
-                        withAnimation {
-                            proxy.scrollTo(lastId, anchor: .bottom)
-                        }
-                    }
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
             .navigationTitle("NLP")
-        }
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 4) {
-                if let error = viewModel.lastError {
-                    Text(error)
-                        .font(.footnote)
-                        .foregroundColor(.red)
-                        .padding(.horizontal)
-                }
-                inputBar
+            .background(Color(.systemBackground))
+            .onTapGesture {
+                // háttérre tappolva zárjuk a billentyűzetet
+                isTextFocused = false
             }
-            .padding(.bottom, 4)
-        }
-        .sheet(item: $selectedItem) { item in
-            FoodDetailLoaderSheet(
-                nlpItem: item,
-                defaultMeal: selectedMeal,
-                defaultDate: selectedDate
-            )
+            .toolbar {
+                // Keyboard fölötti „Done”
+                ToolbarItem(placement: .keyboard) {
+                    HStack {
+                        Spacer()
+                        Button("Done") {
+                            isTextFocused = false
+                        }
+                    }
+                }
+            }
+            // Sheet a kiválasztott ételhez
+            .sheet(item: $selectedItem) { item in
+                FoodDetailLoaderSheet(
+                    nlpItem: item,
+                    defaultMeal: selectedMeal,
+                    defaultDate: selectedDate
+                )
+            }
         }
     }
 
-    private var inputBar: some View {
-        HStack {
-            HStack(spacing: 10) {
-                TextField("Describe what you ate…",
-                          text: $viewModel.inputText,
-                          axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.body)
-                    .lineLimit(1...4)
-                    .submitLabel(.send)
-                    .onSubmit {
-                        viewModel.send()
-                    }
+    // MARK: - Top instructions card
 
-                Button {
-                    viewModel.send()
-                } label: {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .disabled(!viewModel.canSend)
-                .opacity(viewModel.canSend ? 1.0 : 0.4)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Color(.secondarySystemBackground))
-            .clipShape(Capsule())
-            .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 2)
+    private var instructionsCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Describe what you ate")
+                .font(.headline)
+            Text("""
+                 Type in natural language, for example:
+                 • I ate an apple and a yogurt for breakfast
+                 • Two slices of pizza and a cola for dinner
+                 • Just a coffee and a cookie this afternoon
+                 """)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 16)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    // MARK: - Input + Send
+
+    private var inputSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What did you eat?")
+                .font(.headline)
+
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color(.secondarySystemBackground))
+
+                TextEditor(text: $viewModel.inputText)
+                    .focused($isTextFocused)
+                    .scrollContentBackground(.hidden)
+                    .padding(12)
+                    .frame(minHeight: 110, maxHeight: 160)
+
+                if viewModel.inputText.isEmpty {
+                    Text("Describe what you ate…")
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 16)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
+            Button(action: {
+                isTextFocused = false
+                viewModel.send()
+            }) {
+                HStack(spacing: 8) {
+                    if viewModel.isLoading {
+                        ProgressView()
+                    }
+                    Text("Send")
+                        .font(.headline)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(viewModel.canSend ? Color.accentColor : Color(.systemGray4))
+                .foregroundColor(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .disabled(!viewModel.canSend)
+        }
+    }
+
+    // MARK: - Item tap → FoodDetailLoaderSheet
+
+    private func handleItemTap(
+        item: NLCommandResponse.Entities.Item,
+        mealString: String?,
+        dateString: String?
+    ) {
+        selectedItem = item
+        selectedMeal = MealType(fromNLString: mealString)
+
+        if let ds = dateString {
+            let df = DateFormatter()
+            df.calendar = Calendar(identifier: .iso8601)
+            df.locale = Locale(identifier: "en_US_POSIX")
+            df.timeZone = TimeZone(secondsFromGMT: 0)
+            df.dateFormat = "yyyy-MM-dd"
+            selectedDate = df.date(from: ds) ?? Date()
+        } else {
+            selectedDate = Date()
+        }
     }
 }

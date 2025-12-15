@@ -110,33 +110,29 @@ struct LoginView: View {
         }
     }
 
-    // ── Regisztráció email/jelszóval ───────────────────────────────────────────
     private func registerUser() {
-        // Egyezés ellenőrzés
         if password != confirmPassword {
             alertMessage = "Passwords do not match"
             showAlert = true
             return
         }
 
-        // Firebase Auth createUser
         Auth.auth().createUser(withEmail: email, password: password) { result, error in
             if let error = error {
-                alertMessage = error.localizedDescription // pl. gyenge jelszó, foglalt email stb.
+                alertMessage = error.localizedDescription
                 showAlert = true
             } else {
                 alertMessage = "Registration successful!"
                 showAlert = true
-                isLoggedIn = true // továbblépés a fő felületre
+                isLoggedIn = true
             }
         }
     }
 
-    // ── Bejelentkezés email/jelszóval ─────────────────────────────────────────
     private func loginUser() {
         Auth.auth().signIn(withEmail: email, password: password) { result, error in
             if let error = error {
-                alertMessage = error.localizedDescription // helytelen adatok stb.
+                alertMessage = error.localizedDescription
                 showAlert = true
             } else {
                 isLoggedIn = true

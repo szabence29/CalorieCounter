@@ -93,6 +93,8 @@ struct DatePager: View {
 struct DashboardView: View {
     // SwiftData
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var store: ProfileStore
+
     @Query(sort: \FoodLogEntry.date, order: .forward)
     private var allLogs: [FoodLogEntry]
 
@@ -101,7 +103,13 @@ struct DashboardView: View {
     @State private var lastSwipe: SwipeDir = .left
 
     // kalóriacél – egyelőre fix, később jöhet UserProfile-ból
-    let goalCalories: Double = 2200
+    var goalCalories: Double {
+        if let kcal = store.profile.suggestedDailyCalories {
+            return Double(kcal)
+        } else {
+            return 2200   // fallback, ha nincs elég adat a számoláshoz
+        }
+    }
 
     private let swipeThreshold: CGFloat = 60
 

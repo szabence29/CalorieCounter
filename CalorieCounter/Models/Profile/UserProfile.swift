@@ -51,3 +51,63 @@ extension UserProfile {
         return d
     }
 }
+
+// MARK: - Calorie helpers
+
+extension UserProfile {
+
+    /// Mifflin–St Jeor BMR (kcal/nap)
+    /// Visszatér nil-lel, ha hiányzik valamelyik adat.
+    var bmrEstimate: Double? {
+        guard
+            let weightKg,
+            let heightCm,
+            let age,
+            let sex
+        else {
+            return nil
+        }
+
+        let w = weightKg
+        let h = heightCm
+        let a = Double(age)
+
+        if sex.lowercased() == "male" {
+            // férfi
+            return 10.0 * w + 6.25 * h - 5.0 * a + 5.0
+        } else {
+            // nő
+            return 10.0 * w + 6.25 * h - 5.0 * a - 161.0
+        }
+    }
+
+    /// Aktivitási szorzó (ugyanaz, mint a SettingsView-ban)
+    private var activityFactor: Double {
+        switch activity {
+        case "Sedentary":         return 1.2
+        case "Lightly active":    return 1.375
+        case "Moderately active": return 1.55
+        case "Very active":       return 1.725
+        case "Athlete":           return 1.9
+        default:                  return 1.55
+        }
+    }
+
+    /// TDEE = BMR * aktivitási faktor
+    var tdeeEstimate: Double? {
+        guard let bmrEstimate else { return nil }
+        return bmrEstimate * activityFactor
+    }
+
+    /// Javasolt napi kalória a heti súlyváltozás alapján.
+    /// Pontosan ugyanaz a logika, mint a SettingsView-ban az adjustedCalories():
+    ///   tdee + (weeklyDeltaKg * 7700) / 7
+    var suggestedDailyCalories: Int? {
+        guard let tdeeEstimate else { return nil }
+
+        let weeklyDelta = weeklyDeltaKg ?? 0.0
+        let adjusted = tdeeEstimate + (weeklyDelta * 7700.0) / 7.0
+
+        return Int(adjusted.rounded())
+    }
+}

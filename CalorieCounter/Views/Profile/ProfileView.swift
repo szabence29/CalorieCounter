@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import FirebaseAuth
 import GoogleSignIn
+import SwiftData
 
 struct ProfileView: View {
     @EnvironmentObject var store: ProfileStore
@@ -170,17 +171,17 @@ struct ProfileView: View {
                         .padding(.horizontal)
 
                         // Weekly progress
-                        WeeklyProgressCard()
-
+                        //WeeklyProgressCard(dailyGoal: store.suggestedDailyCalories ?? 2200)
+                        
                         // Navigáció + Sign out
                         VStack(spacing: 12) {
-                            NavRow(icon: "chart.bar.doc.horizontal",
-                                   tint: Color.blue.opacity(0.8),
-                                   title: "Nutrition Goals")
+                            //NavRow(icon: "chart.bar.doc.horizontal",
+                            //       tint: Color.blue.opacity(0.8),
+                            //       title: "Nutrition Goals")
 
-                            NavRow(icon: "chart.line.uptrend.xyaxis",
-                                   tint: Color.orange.opacity(0.9),
-                                   title: "Progress Reports")
+                            //NavRow(icon: "chart.line.uptrend.xyaxis",
+                            //       tint: Color.orange.opacity(0.9),
+                            //       title: "Progress Reports")
 
                             NavigationLink { SettingsView() } label: {
                                 NavRow(icon: "gearshape.fill", tint: .gray, title: "Settings")
