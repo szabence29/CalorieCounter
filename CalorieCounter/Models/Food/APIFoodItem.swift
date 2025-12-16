@@ -1,70 +1,64 @@
 import Foundation
 import SwiftData
 
-/// Spoonacular-ból felépített modell (USDA kompatibilis mezőnevekkel, hogy a UI-hoz ne kelljen nyúlni).
+// UI-kompatibilis “API food” modell: Spoonacularból jön
 struct APIFoodItem: Identifiable, Decodable {
-    // Egyedi azonosító
-    let fdcId: Int                     // = Spoonacular id
+    // Spoonacular azonosító – több néven is elérhető a kódban (UI/VM kompat miatt).
+    let fdcId: Int
     var id: Int { fdcId }
-    var spoonId: Int { fdcId }         // ⬅️ alias a ViewModel-hez
+    var spoonId: Int { fdcId }
 
-    // Megjelenített név
-    let description: String            // = Ingredient name
+    let description: String
 
-    // Opcionális UI-mezők (régi interfész)
+    // Régi UI miatt itt hagyott, de Spoonacularból tipikusan nincs/ nem használjuk.
     let brandOwner: String? = nil
     let servingSize: Double?
     let servingSizeUnit: String?
     let foodNutrients: [APINutrient]? = nil
 
-    // Meta
     let dataType: String? = "Spoonacular"
     let foodCategory: String?
 
-    // Makrók
-    let energyKcalValue: Int?          // ⬅️ belső tároló (nil lehet a “light” állapotban)
+    // “Light” rekordnál ezek még lehetnek nil-ek, később dúsítjuk.
+    let energyKcalValue: Int?
     let protein_g: Double?
     let fat_total_g: Double?
     let carbohydrates_total_g: Double?
     let fiber_g: Double?
     let sugar_g: Double?
 
-    // Kép
     let imageUrl: URL?
 
-    // Dummy a régi API-hoz igazodva (nem használjuk most)
     struct APINutrient: Decodable {
         let nutrientName: String?
         let unitName: String?
         let value: Double?
     }
 
-    // MARK: - Computed-ek a meglévő UI-hoz
+    // MARK: - UI helper-ek
 
     var primaryName: String {
         let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let firstChunk = trimmed.split(separator: ",").first { return String(firstChunk) }
+        if let firstChunk = trimmed.split(separator: ",").first { return String(firstChunk) }
         return String(trimmed.split(separator: " ").first ?? Substring(trimmed))
     }
 
     var energyKcal: Int? { energyKcalValue }
 
     var servingLine: String {
-        if let s = servingSize, let u = servingSizeUnit, s > 0 {
-            let sText = (s == floor(s)) ? String(Int(s)) : String(s)
-            return "\(sText) \(u.lowercased())"
-        }
-        return ""
+        guard let s = servingSize, let u = servingSizeUnit, s > 0 else { return "" }
+        let sText = (s == floor(s)) ? String(Int(s)) : String(s)
+        return "\(sText) \(u.lowercased())"
     }
 
-    // MARK: - Spoonacular initializer
+    // MARK: - Spoonacular -> APIFoodItem
 
     init(
         spoonId: Int,
         name: String,
         servingSize: Double,
         servingSizeUnit: String,
-        energyKcal: Int?,                 // ⬅️ legyen optional, hogy a “light” rekordnál mehessen nil
+        energyKcal: Int?,
         protein_g: Double?,
         fat_total_g: Double?,
         carbohydrates_total_g: Double?,
@@ -87,7 +81,7 @@ struct APIFoodItem: Identifiable, Decodable {
         self.imageUrl = imageUrl
     }
 
-    // SwiftData entitássá alakítás – megtartjuk a régi sémát
+    /// SwiftData entitás: itt csak a minimál mezőket tároljuk (a többi “snapshot” a naplóba kerül).
     func toFoodItem() -> FoodItem {
         FoodItem(fdcId: fdcId, description: description)
     }

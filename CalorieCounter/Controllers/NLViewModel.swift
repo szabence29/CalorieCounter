@@ -8,9 +8,11 @@ final class NLViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var lastError: String?
 
+    // Debug UI: nyers JSON + dekódolt modell egymás mellett.
     @Published var lastRawResponse: String = ""
     @Published var lastResponse: NLCommandResponse?
 
+    // Lokális dev backend
     private let endpoint = URL(string: "http://127.0.0.1:8000/nl-command")!
 
     var canSend: Bool {
@@ -35,7 +37,6 @@ final class NLViewModel: ObservableObject {
         } catch {
             isLoading = false
             lastError = "Encoding error: \(error.localizedDescription)"
-            print("Encoding error:", error)
             return
         }
 
@@ -46,28 +47,21 @@ final class NLViewModel: ObservableObject {
                 if let http = response as? HTTPURLResponse,
                    !(200..<300).contains(http.statusCode) {
                     let raw = String(data: data, encoding: .utf8) ?? "<no body>"
-                    print("Server error \(http.statusCode):\n\(raw)")
                     lastError = "Server error: \(http.statusCode)"
                     lastRawResponse = raw
                     isLoading = false
                     return
                 }
 
-                let decoder = JSONDecoder()
-                let parsed = try decoder.decode(NLCommandResponse.self, from: data)
+                let parsed = try JSONDecoder().decode(NLCommandResponse.self, from: data)
 
                 isLoading = false
                 lastResponse = parsed
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    lastRawResponse = jsonString
-                }
-
-                print("NLCommand response:", parsed)
+                lastRawResponse = String(data: data, encoding: .utf8) ?? ""
 
             } catch {
                 isLoading = false
                 lastError = "Network/decoding error: \(error.localizedDescription)"
-                print("Request failed:", error)
             }
         }
     }

@@ -4,6 +4,7 @@ struct OnboardingView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var store: ProfileStore
 
+    // Onboarding egy “lokális draft”: csak Continue-nál mentünk store-ba.
     @State private var name: String = ""
     @State private var age: Int = 18
     @State private var sex: String = "male"
@@ -25,10 +26,9 @@ struct OnboardingView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // Fejléc
                 VStack(spacing: 6) {
                     Text("Welcome! 👋").font(.system(size: 28, weight: .bold))
-                    Text("A pár alapadat segít személyre szabni az appot.")
+                    Text("Provide some information to get started!")
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 24)
@@ -90,6 +90,7 @@ struct OnboardingView: View {
     }
 
     private func preloadFromProfile() {
+        // Ha van már profil (pl. visszatérő user), töltsük elő a mezőket.
         let p = store.profile
         if let n = p.name, !n.isEmpty { name = n }
         if let a = p.age, a > 0 { age = a }
@@ -100,6 +101,7 @@ struct OnboardingView: View {
     }
 
     private func complete() {
+        // Mentés a store-ba + flag(ek), majd dismiss.
         Task {
             await store.update(fields: [
                 "name": name,

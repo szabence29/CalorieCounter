@@ -23,9 +23,10 @@ struct RootView: View {
             case .signedIn:
                 MainTabBar()
                     .task {
+                        // Belépés után biztosítjuk, hogy a profil egyszer be legyen töltve.
                         if !profileStore.isLoaded { await profileStore.start() }
                     }
-                    // NINCS külön @State; az isPresented közvetlenül a store-ból számol
+                    // Onboarding akkor jelenik meg, ha van user + betöltött profil + hiányos core adatok / nincs kész.
                     .fullScreenCover(
                         isPresented: Binding(
                             get: {
@@ -41,6 +42,7 @@ struct RootView: View {
             }
         }
         .onAppear {
+            // Auth listener frissíti a fázist login/logout eseményekre.
             guard authHandle == nil else { return }
             phase = .loading
             authHandle = Auth.auth().addStateDidChangeListener { _, user in
@@ -61,6 +63,7 @@ struct RootView: View {
     }
 
     private func shouldShowOnboarding() -> Bool {
+        // Minimal “kötelező” mezők: név + életkor, illetve onboardingCompleted flag.
         let p = profileStore.profile
         let missingCore =
             (p.name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ||

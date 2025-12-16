@@ -1,5 +1,6 @@
 import Foundation
 
+// UI-hoz egy “kártya / szekció” csoportosítás: több találatot fog össze (pl. azonos kategória/név alapján).
 struct FoodGroup: Identifiable {
     let id = UUID()
     let name: String
@@ -8,6 +9,7 @@ struct FoodGroup: Identifiable {
     var representative: APIFoodItem? { items.first }
     var count: Int { items.count }
 
+    // Gyors összefoglaló a kártyára (ha nincs kcal, akkor dash).
     var kcalRangeText: String {
         let kcals = items.compactMap { $0.energyKcal }
         guard let min = kcals.min(), let max = kcals.max() else { return "— cal" }

@@ -6,12 +6,13 @@ import FirebaseAuth
 
 @main
 struct CalorieCounterApp: App {
+    // Firebase init + Google Sign-In URL callback miatt kell AppDelegate.
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
-    // ProfileStore a teljes appnak
+    // App-szintű profil/session store (EnvironmentObjectként megy le a view hierarchián).
     @StateObject private var profileStore = ProfileStore()
 
-    // SwiftData container (maradhat ahogy volt)
+    // SwiftData perzisztencia (FoodItem, FoodLogEntry). App-wide, egy konténer példány.
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             FoodItem.self,
@@ -27,7 +28,7 @@ struct CalorieCounterApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView() // auth-alapú router
+            RootView() // belépési állapot alapján router: Login vs Main
                 .environmentObject(profileStore)
         }
         .modelContainer(sharedModelContainer)
@@ -45,6 +46,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ app: UIApplication, open url: URL,
                      options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+        // OAuth redirect URL kezelése Google Sign-In-nál.
         return GIDSignIn.sharedInstance.handle(url)
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 
+/// OpenFoodFacts keresési válasz (csak a ténylegesen használt mezők).
 struct OFFSearchResponse: Decodable {
     let products: [OFFProduct]
     let count: Int?
@@ -8,7 +9,7 @@ struct OFFSearchResponse: Decodable {
 }
 
 struct OFFProduct: Decodable, Identifiable {
-    let code: String                 // EAN/UPC, pl. "599..."
+    let code: String
     let product_name: String?
     let product_name_en: String?
     let brands: String?
@@ -27,7 +28,7 @@ struct OFFProduct: Decodable, Identifiable {
         let salt_100g: Double?
     }
 
-    /// Preferált megjelenítési név (HU → EN → márka → vonalkód)
+    /// Preferált megjelenítési név (EN → HU → márka → vonalkód).
     var displayName: String {
         product_name_en?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         ?? product_name?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty

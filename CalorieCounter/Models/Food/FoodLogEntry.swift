@@ -1,6 +1,8 @@
 import Foundation
 import SwiftData
 
+/// Naplózott étkezési bejegyzés.
+/// Fontos: “snapshot” jellegű (név + makrók kiszámolva grammból), hogy később ne változzon az API-tól.
 @Model
 final class FoodLogEntry {
     var id: UUID
@@ -14,12 +16,10 @@ final class FoodLogEntry {
     var protein_g: Double?
     var fat_g: Double?
 
-    init(from item: APIFoodItem,
-         grams: Double,
-         meal: MealType,
-         date: Date)
-    {
+    init(from item: APIFoodItem, grams: Double, meal: MealType, date: Date) {
         self.id = UUID()
+
+        // Nap-szintű csoportosítás miatt “startOfDay”-re normalizálunk.
         self.date = Calendar.current.startOfDay(for: date)
         self.mealRaw = meal.rawValue
         self.grams = grams
@@ -29,14 +29,13 @@ final class FoodLogEntry {
         let base = item.servingSize ?? 100
         let factor = base > 0 ? grams / base : grams / 100
 
-        self.energyKcal = Int(
-            (Double(item.energyKcal ?? 0) * factor).rounded()
-        )
+        self.energyKcal = Int((Double(item.energyKcal ?? 0) * factor).rounded())
         self.carbs_g = item.carbohydrates_total_g.map { $0 * factor }
         self.protein_g = item.protein_g.map { $0 * factor }
         self.fat_g = item.fat_total_g.map { $0 * factor }
     }
 
+    /// UI kényelmi wrapper: a DB-ben stringként tároljuk.
     var meal: MealType {
         get { MealType(rawValue: mealRaw) ?? .breakfast }
         set { mealRaw = newValue.rawValue }

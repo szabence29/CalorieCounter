@@ -1,5 +1,7 @@
 import Foundation
 
+/// FastAPI NL endpoint válasza (szerződés).
+/// Ezt a struktúrát a Chat/NL ViewModel dekódolja és UI-szöveg/akció készül belőle.
 struct NLCommandResponse: Codable {
     struct Entities: Codable {
         struct Item: Codable, Identifiable, Hashable {
@@ -18,4 +20,3 @@ struct NLCommandResponse: Codable {
     let entities: Entities
     let missing_fields: [String]
 }
-

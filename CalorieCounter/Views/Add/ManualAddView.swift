@@ -47,7 +47,6 @@ struct ManualAddView: View {
                     .padding(.bottom, 16)
                 }
             }
-            // Nagy overlay, ha még nincs lista és töltünk
             .overlay {
                 if viewModel.isLoading && viewModel.items.isEmpty {
                     LoadingOverlay(title: "Searching…")
@@ -73,7 +72,7 @@ struct ManualAddView: View {
         }
     }
 
-    // MARK: - Top – chips + kereső
+    //chips + kereső
 
     private var ChipsAndSearchBar: some View {
         VStack(spacing: 8) {
@@ -128,7 +127,7 @@ struct ManualAddView: View {
     }
 }
 
-// MARK: - Reusable UI
+//Reusable UI
 
 private struct MealChip: View {
     let title: String

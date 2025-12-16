@@ -5,7 +5,11 @@ struct ChatMessage: Identifiable {
     let id = UUID()
     let isUser: Bool
     let text: String
+
+    // Debug/trace: ugyanaz a user input visszacsatolva, ha később kell összevetni a parse-szal.
     let originalText: String?
+
+    // A backend által visszaadott strukturált értelmezés (ha kell UI-hoz / későbbi action-ökhöz).
     let parsed: NLCommandResponse?
 }
 
@@ -15,9 +19,9 @@ final class ChatViewModel: ObservableObject {
     @Published var inputText: String = ""
     @Published var isLoading: Bool = false
     @Published var lastError: String?
-
     @Published var messages: [ChatMessage] = []
 
+    // Deployolt NL endpoint
     private let endpoint = URL(string: "https://caloriecounter-45of.onrender.com/nl-command")!
 
     var canSend: Bool {
@@ -30,13 +34,12 @@ final class ChatViewModel: ObservableObject {
 
         lastError = nil
 
-        let userMessage = ChatMessage(
+        messages.append(ChatMessage(
             isUser: true,
             text: trimmed,
             originalText: nil,
             parsed: nil
-        )
-        messages.append(userMessage)
+        ))
 
         inputText = ""
         isLoading = true
@@ -52,7 +55,6 @@ final class ChatViewModel: ObservableObject {
         } catch {
             isLoading = false
             lastError = "Encoding error: \(error.localizedDescription)"
-            print("Encoding error:", error)
             return
         }
 
@@ -62,33 +64,27 @@ final class ChatViewModel: ObservableObject {
 
                 if let http = response as? HTTPURLResponse,
                    !(200..<300).contains(http.statusCode) {
-                    let raw = String(data: data, encoding: .utf8) ?? "<no body>"
-                    print("Server error \(http.statusCode):\n\(raw)")
                     lastError = "Server error: \(http.statusCode)"
                     isLoading = false
                     return
                 }
 
-                let decoder = JSONDecoder()
-                let parsed = try decoder.decode(NLCommandResponse.self, from: data)
+                let parsed = try JSONDecoder().decode(NLCommandResponse.self, from: data)
                 isLoading = false
 
+                // UI-barát összefoglaló: a strukturált válaszból emberi “preview” szöveg.
                 let summary = Self.formatSummary(from: parsed)
 
-                let assistantMessage = ChatMessage(
+                messages.append(ChatMessage(
                     isUser: false,
                     text: summary,
                     originalText: trimmed,
                     parsed: parsed
-                )
-                messages.append(assistantMessage)
-
-                print("Parsed:", parsed)
+                ))
 
             } catch {
                 isLoading = false
                 lastError = "Network/decoding error: \(error.localizedDescription)"
-                print("Request failed:", error)
             }
         }
     }
@@ -105,13 +101,8 @@ final class ChatViewModel: ObservableObject {
             parts.append("Items:\n\(itemsLines)")
         }
 
-        if let meal = response.entities.meal {
-            parts.append("Meal: \(meal)")
-        }
-
-        if let date = response.entities.date {
-            parts.append("Date: \(date)")
-        }
+        if let meal = response.entities.meal { parts.append("Meal: \(meal)") }
+        if let date = response.entities.date { parts.append("Date: \(date)") }
 
         if !response.missing_fields.isEmpty {
             parts.append("Missing: \(response.missing_fields.joined(separator: ", "))")

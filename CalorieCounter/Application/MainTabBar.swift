@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainTabBar: View {
     var body: some View {
+        // App fő navigáció: a “root” signed-in felület.
         TabView {
             DashboardView()
                 .tabItem {

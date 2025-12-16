@@ -147,10 +147,10 @@ struct FoodDetailView: View {
                     Spacer()
                 }
 
-                Spacer(minLength: 8) // hagyjunk helyet az alsó gombnak
+                Spacer(minLength: 8)
             }
             .padding(16)
-            .padding(.bottom, ACTION_HEIGHT + 24) // tartalom ne fusson a gomb alá
+            .padding(.bottom, ACTION_HEIGHT + 24)
         }
         .navigationTitle("Food details")
         .navigationBarTitleDisplayMode(.inline)

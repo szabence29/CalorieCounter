@@ -2,35 +2,31 @@ import Foundation
 import SwiftData
 import Network
 
-// MARK: - ViewModel
 @MainActor
 final class FoodViewModel: ObservableObject {
 
-    // UI state
     @Published var items: [APIFoodItem] = []
     @Published var isLoading = false
     @Published var lastError: String?
     @Published var isOnline = true
 
-    // API
+    // Info.plist / xcconfig kulcs: ha hiányzik, itt bukjon el, ne random API-hibákkal később.
     private let apiKey: String = {
-            guard let key = Bundle.main.object(forInfoDictionaryKey: "SPOONACULAR_API_KEY") as? String,
-                  !key.isEmpty else {
-                fatalError("SPOONACULAR_API_KEY missing from Info.plist / xcconfig")
-            }
-            return key
-        }()
-    
-    private let baseURL = URL(string: "https://api.spoonacular.com")!
+        guard let key = Bundle.main.object(forInfoDictionaryKey: "SPOONACULAR_API_KEY") as? String,
+              !key.isEmpty else {
+            fatalError("SPOONACULAR_API_KEY missing from Info.plist / xcconfig")
+        }
+        return key
+    }()
 
-    // Keresési beállítások
+    private let baseURL = URL(string: "https://api.spoonacular.com")!
     private let pageSize = 100
 
-    // Hálózatfigyelés
+    // Online/offline jelzéshez (UX): ne indítsunk keresést, ha nincs net.
     private let monitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "net.monitor", qos: .utility)
 
-    // Cancel a futó keresésre/dúsításra
+    // Az aktuális keresés/dúsítás megszakítható (új keresésnél ne fusson a régi).
     private var currentTask: Task<Void, Never>?
 
     init() {
@@ -47,18 +43,15 @@ final class FoodViewModel: ObservableObject {
         currentTask?.cancel()
     }
 
-    // MARK: - Public API (kompatibilis a nézetekkel)
-
     func fetchFoods(query: String = "") {
         fetchFoodsPaginated(query: query, pages: 1)
     }
 
-    /// A ManualAddView ezt hívja – API kompatibilitás megtartva. :contentReference[oaicite:2]{index=2}
     func fetchFoodsPaginated(query: String, pages: Int = 1) {
         currentTask?.cancel()
         lastError = nil
 
-        // Fire-and-forget Task, a hívó felé nem kell async interface
+        // Nem async API a view felé: belül indítunk Task-ot.
         currentTask = Task { [weak self] in
             guard let self else { return }
             await self._fetchFoodsPaginated(query: query, pages: pages)
@@ -68,7 +61,7 @@ final class FoodViewModel: ObservableObject {
     func saveToDatabase(item: APIFoodItem, context: ModelContext) {
         context.insert(item.toFoodItem())
     }
-    
+
     func addLogEntry(
         for item: APIFoodItem,
         grams: Double,
@@ -80,18 +73,16 @@ final class FoodViewModel: ObservableObject {
         context.insert(entry)
     }
 
-    // MARK: - Implementáció
-
     private func _fetchFoodsPaginated(query: String, pages: Int) async {
         guard isOnline else {
-            self.lastError = "Offline – ellenőrizd a hálózatot."
+            lastError = "Offline – ellenőrizd a hálózatot."
             return
         }
 
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            self.items = []
-            self.isLoading = false
+            items = []
+            isLoading = false
             return
         }
 
@@ -99,32 +90,27 @@ final class FoodViewModel: ObservableObject {
         lastError = nil
 
         do {
-            // 1) keresési oldalak lekérése
             let pageCount = max(1, pages)
             let results = try await loadSearchPages(query: trimmed, pages: pageCount)
-
             if Task.isCancelled { return }
 
-            // 2) light lista felrajzolása (kép + név, kcal = nil)
+            // 1) gyors lista (név+kép), 2) dúsítás később sorban (rate limit barát).
             let light = mapLight(results: results)
-            self.items = dedupeBySpoonId(light)
+            items = dedupeBySpoonId(light)
                 .sorted { $0.description.localizedCaseInsensitiveCompare($1.description) == .orderedAscending }
 
             if Task.isCancelled { return }
 
-            // 3) dúsítás sorosan, 429-et kezelve
             let ids = Array(Set(results.map(\.id)))
             await enrichSequential(ids: ids)
 
             isLoading = false
         } catch {
             if Task.isCancelled { return }
-            self.isLoading = false
-            self.lastError = error.localizedDescription
+            isLoading = false
+            lastError = error.localizedDescription
         }
     }
-
-    // MARK: - Search
 
     private func loadSearchPages(query: String, pages: Int) async throws -> [IngredientResult] {
         var out: [IngredientResult] = []
@@ -159,7 +145,7 @@ final class FoodViewModel: ObservableObject {
                 name: r.name,
                 servingSize: 100,
                 servingSizeUnit: "g",
-                energyKcal: nil,                 // „—” a listában
+                energyKcal: nil,
                 protein_g: nil,
                 fat_total_g: nil,
                 carbohydrates_total_g: nil,
@@ -171,10 +157,7 @@ final class FoodViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Enrichment (sequential + retry/backoff 429-re)
-
     private func enrichSequential(ids: [Int]) async {
-        // kis lépésköz a kérések között (kíméli a rate limitet)
         let baseGap: TimeInterval = 0.25
 
         for (idx, id) in ids.enumerated() {
@@ -209,17 +192,13 @@ final class FoodViewModel: ObservableObject {
                     imageUrl: imgURL
                 )
 
-                // Per-sor frissítés (szebb UX)
                 applyRowUpdate(enriched)
 
             } catch {
-                // 429 vagy más hiba után lépjünk tovább; a light sor marad „—”-on
-                // (Ha akarsz, ide tehetsz loggolást.)
+                // Ha egy elem dúsítása elhasal (pl. 429), a “light” sor marad.
             }
 
-            // alap gap (ha Retry-After volt, azt a fetchInfoWithRetry már kivárta)
             try? await Task.sleep(nanoseconds: UInt64(baseGap * 1_000_000_000))
-            // kis ritkítás nagy listán
             if idx % 50 == 0 { try? await Task.sleep(nanoseconds: 50_000_000) }
         }
     }
@@ -233,7 +212,6 @@ final class FoodViewModel: ObservableObject {
             do {
                 let (data, response) = try await URLSession.shared.data(from: infoURL(id: id))
                 if let http = response as? HTTPURLResponse, http.statusCode == 429 {
-                    // Rate limited – várjunk Retry-After-t, vagy exponenciális backoffot
                     let wait = http.retryAfter ?? pow(2.0, Double(attempt)) * 0.8
                     try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                     attempt += 1
@@ -244,7 +222,6 @@ final class FoodViewModel: ObservableObject {
             } catch {
                 lastError = error
                 attempt += 1
-                // kis backoff
                 try? await Task.sleep(nanoseconds: UInt64(pow(2.0, Double(attempt)) * 0.3 * 1_000_000_000))
             }
         }
@@ -261,8 +238,6 @@ final class FoodViewModel: ObservableObject {
             ])
     }
 
-    // MARK: - Helpers
-
     private func dedupeBySpoonId(_ array: [APIFoodItem]) -> [APIFoodItem] {
         var seen = Set<Int>()
         var out: [APIFoodItem] = []
@@ -273,7 +248,6 @@ final class FoodViewModel: ObservableObject {
         return out
     }
 
-    /// Per-sor frissítés: ha megjött a dúsított elem, cseréljük a helyén.
     private func applyRowUpdate(_ item: APIFoodItem) {
         if let idx = items.firstIndex(where: { $0.spoonId == item.spoonId }) {
             items[idx] = item
@@ -283,8 +257,6 @@ final class FoodViewModel: ObservableObject {
         items.sort { $0.description.localizedCaseInsensitiveCompare($1.description) == .orderedAscending }
     }
 }
-
-// MARK: - URL & HTTP helpers
 
 private extension URL {
     func appending(queryItems: [URLQueryItem]) -> URL {
@@ -305,7 +277,6 @@ private extension URLResponse {
 
 private extension HTTPURLResponse {
     var retryAfter: TimeInterval? {
-        // Retry-After (seconds vagy HTTP-date); itt csak seconds-t kezelünk
         if let v = allHeaderFields["Retry-After"] as? String, let sec = TimeInterval(v) {
             return sec
         }

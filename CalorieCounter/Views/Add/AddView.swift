@@ -8,7 +8,7 @@ struct AddView: View {
             VStack(spacing: 40) {
                 Spacer()
                 VStack(spacing: 32) {
-                    // 🔹 Navigáció a ManualAddView-hoz
+                    // Navigáció a ManualAddView-hoz
                     NavigationLink {
                         ManualAddView(viewModel: viewModel)
                     } label: {

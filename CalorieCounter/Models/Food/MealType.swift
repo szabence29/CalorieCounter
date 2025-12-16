@@ -7,13 +7,11 @@ enum MealType: String, CaseIterable, Identifiable {
     case snack     = "Snack"
 
     var id: String { rawValue }
-
-    var displayName: String {
-        rawValue
-    }
+    var displayName: String { rawValue }
 }
 
 extension MealType {
+    /// Backend/NL oldali szövegekből biztonságos konverzió (fallback: breakfast).
     init(fromNLString value: String?) {
         let lower = value?
             .trimmingCharacters(in: .whitespacesAndNewlines)
