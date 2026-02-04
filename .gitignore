@@ -5,6 +5,10 @@ venv/
 
 # Secrets
 .env
+GoogleService-Info.plist
+config.xcconfig
+CalorieCounter/GoogleService-Info.plist
+CalorieCounter/config.xcconfig
 
 # Xcode / iOS build
 DerivedData/
